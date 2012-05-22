@@ -6,4 +6,4 @@ php:
 before_script:
   - mysql -e 'CREATE DATABASE xBoilerplate_additions;'
 
-script: phpunit -c test/CW/
+script: phpunit -c test/CW/additions.xml
