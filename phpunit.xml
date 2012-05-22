@@ -1,4 +1,6 @@
-<phpunit>
+<phpunit
+        bootstrap='./bootstrap.php'
+        >
     <testsuites>
         <file>CW/MySQLTest.php</file>
     </testsuites>
