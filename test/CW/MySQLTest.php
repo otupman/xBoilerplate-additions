@@ -39,7 +39,7 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
         if(!$statement->prepare('INSERT INTO people (firstname, lastname, age, createdDate, balance) VALUES (?, ?, ?, ?, ?)')) {
             throw new Exception('Error preparing insert query: ' . $statement->error);
         }
-        if(!$statement->bind_param('ssisd', &$firstname, &$lastname, &$age, &$createdDate, &$balance)) {
+        if(!$statement->bind_param('ssisd', $firstname, $lastname, $age, $createdDate, $balance)) {
             throw new Exception('Error binding parameters: ' . $statement->error);
         }
         if(!$statement->execute()) {
