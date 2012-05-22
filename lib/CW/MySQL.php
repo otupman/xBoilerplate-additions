@@ -9,6 +9,7 @@ class CW_MySQL
     protected static $_db = null;
 
     protected function __construct() {
+        $config = xBoilerplate::getConfig()->db;
         self::$_db = new mysqli($config['host'], $config['username'], $config['password'], $config['db']);
     }
 
