@@ -1,0 +1,5 @@
+<phpunit>
+    <testsuites>
+        <file>CW/MySQLTest.php</file>
+    </testsuites>
+</phpunit>
