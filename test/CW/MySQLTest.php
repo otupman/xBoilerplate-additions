@@ -5,7 +5,7 @@
  * Date: 21/05/2012
  * Time: 09:23
  */
-
+require_once('../bootstrap.php');
 class CW_MySQLTest extends PHPUnit_Framework_TestCase
 {
     private $config;
@@ -20,6 +20,7 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
     private $alice;
 
     public function setup() {
+       // error_reporting(E_ALL);
         $this->config = array();
         //TODO: these settings should come from the containing phpunit
         $this->config['db'] = array(
@@ -96,13 +97,15 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
      */
     public function testSimplestSelect() {
         // Simple SELECT firstname, lastname FROM people
-        $people = CW_MySQL::getInstance()->select(array('firstname', 'lastname'), 'people');
+        $people = CW_MySQL::getInstance()->select(array('id','firstname', 'lastname'), 'people');
 
-        $this->assertEquals(2, sizeof($people), 'Incorrect number of rows returned');
+        $this->assertEquals(3, sizeof($people), 'Incorrect number of rows returned');
 
-        $barney = $people[0];
-        $this->assertEquals($this->barney['firstname'], $barney->firstname, 'First name is incorrect');
-        $this->assertObjectHasAttribute('lastname', $barney, 'All-column select should contain column lastname');
+        $fred = $people[0];
+        $this->assertInstanceOf('stdClass', $fred, 'Rows should be objects');
+        $this->assertObjectHasAttribute('firstname', $fred, 'First row should have property firstname');
+        $this->assertEquals($this->fred['firstname'], $fred->firstname, 'First name is incorrect');
+        $this->assertObjectHasAttribute('lastname', $fred, 'All-column select should contain column lastname');
 
     }
     /**
@@ -163,13 +166,13 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
 
         $this->assertObjectNotHasAttribute('lastname', $people[0], 'Lastname should not be present but is');
         $this->assertObjectHasAttribute('firstname', $people[0], 'First name should be present but is not');
-        $fred = $people[1];
-        $this->assertEquals($this->fred['lastname'], $fred['lastname'], 'Lastname value incorrect');
+        $fred = $people[0];
+        $this->assertEquals($this->fred['firstname'], $fred->firstname, 'Firstname value incorrect');
 
         // SELECT id, lastname FROM people
         $people = CW_MySQL::getInstance()->select(array('id', 'lastname'), 'people');
 
-        $this->assertObjectHasAttribute('firstname', $people[0], 'Firstname should not be present, just: id, lastname');
+        $this->assertObjectNotHasAttribute('firstname', $people[0], 'Firstname should not be present, just: id, lastname');
     }
 
     public function testSelectRow() {
@@ -206,12 +209,27 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
 
     }
 
+    /**
+     * Tests the where clause processing to ensure that bad operators are picked up
+     */
+    public function testBadWhere() {
+        try {
+            CW_MySQL::getInstance()->select(array('firstname'), 'people', array('firstname X' => 'Bob'));
+            $this->fail('Expected exception due to an invalid operator "X"');
+        } catch(Exception $ex) { /* Expected */ }
+
+        try {
+            CW_MySQL::getInstance()->select(array('firstname'), 'people', array('firstname > 5' => 'Bob'));
+            $this->fail('Expected exception due to bad WHERE clause: "firstname > 5"');
+        } catch(Exception $ex) { /* Expected */ }
+    }
+
     public function testSelectWithSort() {
         // SELECT firstname FROM people ORDER BY age DESC
         $aliceFirst = CW_MySQL::getInstance()->select(array('firstname'), 'people', null, array('age' => 'DESC'));
 
         $alice = $aliceFirst[0];
-        $this->assertEquals($this->alice['firstname'], $alice['firstname']);
+        $this->assertEquals($this->alice['firstname'], $alice->firstname);
         $barney = $aliceFirst [1];
         $this->assertEquals('Barney', $barney['firstname']);
     }

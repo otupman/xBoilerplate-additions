@@ -2,6 +2,7 @@
 /**
  * Initial blank version, ready for update.
  */
+
 class CW_MySQL
 {
     //TODO: currently all exceptions are Exception; need to create a MySQLException class once all error scenarios are found
@@ -10,8 +11,9 @@ class CW_MySQL
     protected static $_db = null;
 
     protected function __construct() {
-        $config = xBoilerplate::getConfig()->db;
-        self::$_db = new mysqli($config['host'], $config['username'], $config['password'], $config['db']);
+        //$config = xBoilerplate::getConfig()->db;
+        //self::$_db = new mysqli($config['host'], $config['username'], $config['password'], $config['db']);
+        self::$_db = new mysqli('localhost', 'root', '', 'xBoilerplate_additions');
     }
 
     /**
@@ -35,6 +37,10 @@ class CW_MySQL
     const NO_ORDER = null;
     const NO_LIMIT = null;
     const NO_OBJECT = 'stdClass';
+
+    private static $VALID_OPERATORS = array(
+        '>', '<', '=', '!='
+    );
     /**
      * @param $table
      * @param $attrs
@@ -45,35 +51,80 @@ class CW_MySQL
                            $className = self::NO_OBJECT)
     {
         $columnFragment = implode(', ', $columns);
-        $containsSelectAsterisk = stripos($columnFragment, '*') != -1;
+        $containsSelectAsterisk = stripos($columnFragment, '*') !== false;
         if($containsSelectAsterisk) {
             throw new Exception('Select * is not allowed');
         }
-        $query = 'SELECT ' . $columnFragment . ' \n';
-        $query.= 'FROM ' . $table . ' \n';
+
+        $whereClauses = array();
+
+        if($where != self::NO_WHERE) {
+            if(!is_array($where)) {
+                throw new Exception('Where clause must be an array');
+            }
+            foreach($where as $column => $columnValue) {
+                $column = trim($column);
+                $hasOperator = stripos($column, ' ') != -1;
+            }
+        }
+
+        $query = 'SELECT ' . $columnFragment . ' ';
+        $query.= 'FROM ' . $table . ' ';
+//        user_error('Preparing query '. $query);
 
         $statement = self::$_db->prepare($query);
         if($statement === false) {
             throw self::createQueryException('Could not prepare query', self::$_db, $query);
         }
 
-        if(!$statement->execute()) {
+        return $this->executeStatement($statement, $query, $className);
+    }
+
+    private function getType($value, $typeHint = null) {
+        switch(gettype($value)) {
+            case 'integer':
+                return 'i';
+            case 'double':
+                return 'd';
+            case 'string':
+                return 's';
+            case 'object':
+                if($value instanceof DateTime) {
+                    return 'd';
+                }
+                else {
+                    // Unsupported object type
+                    //TODO: Add ability for custom type conversion?
+                }
+            default:
+                throw new Exception('Unsupported type: ' . gettype($value));
+        }
+    }
+
+    public function executeStatement(mysqli_stmt $statement, $query, $className)
+    {
+        if (!$statement->execute()) {
             throw self::createQueryException('Error executing query', $statement, $query);
         }
 
         $result = $statement->get_result();
-        if($result === false) {
+        if ($result === false) {
             throw self::createQueryException('Error getting results', $statement, $query);
         }
         $results = array();
-        foreach($result->fetch_object($className) as $row) {
+        while(($row = $result->fetch_object($className)) != null) {
             $results[] = $row;
         }
+        $statement->close();
+
         return $results;
     }
 
     private static function createQueryException($message, $dbObject, $query) {
-        throw new Exception($message . ', error: ' . $dbObject->error . ' for query: ' . $query);
+        return new Exception($message . ', error: '
+            . $dbObject->error
+            . ' for query: '
+            . $query);
     }
 
 
