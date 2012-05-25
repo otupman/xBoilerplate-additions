@@ -2,14 +2,19 @@
 /**
  * Initial blank version, ready for update.
  */
-class CW_MySQL
+class CW_MySQL extends ArrayObject
 {
 
     protected static $_object = null;
     protected static $_db = null;
 
-    protected function __construct() {
-        self::$_db = new mysqli($config['host'], $config['username'], $config['password'], $config['db']);
+    public function __construct() {
+        //self::$_db = new mysqli($config['host'], $config['username'], $config['password'], $config['db']);
+        self::$_db = new mysqli('localhost', 'root', '', 'xBoilerplate_additions');
+
+
+
+
     }
 
     /**
@@ -36,17 +41,87 @@ class CW_MySQL
      * @param array $where
      * @return mixed
      */
-    public function select($table, $attrs, $where = null, $order = null) {
+    public function select(array $attrs, $table, array $where = null, $order = null) {
 
-        $sth = $dbh->prepare('SELECT ? FROM ? WHERE ?');
-        $sth->bindValue(1, $calories, PDO::PARAM_INT);
-        $sth->bindValue(2, $colour, PDO::PARAM_STR);
-        $sth->execute();
+//        $b = new ArrayObject();
+//        $results = array();
+//        if($where == null && $order == null) {
+//            $atrib = (count($attrs) >= 1) ? 'SELECT '.implode(", ", $attrs) : '';
+//            $table = ' FROM '.$table;
+//            $query = $atrib.$table;
+//
+//
+//            if($results = self::$_db->prepare($query)) {
+//                $results->execute();
+//                while($obj = $results->fetch_object()) {
+//                    $results[] = $obj;
+//                }
+//            }
+//            return $results;
 
+//            $stmt = self::$_db->prepare($sql);
+//            if ($stmt === false) {
+//                throw new Exception('Errror! ' .self::$_db->error);
+//                error_log('asdasdasdasdasdasdasdasdasd', 0, '/vagrant/error_log');
+//            }
+//            $data = $stmt->execute();
+//            $bindResultParameters = (count($attrs) >= 1) ? '$'.implode(", $", $attrs) : '';
+//            $stmt->bind_result($bindResultParameters);
+//            error_log($data, 0, '/vagrant/error_log');
+//
+//        }
     }
 
-    public function insert($table, array $data) {
+    private function _createValues($numberOfValues) {
+        $values = '';
 
+        for($i=1; $i <= $numberOfValues; $i++) {
+            $values .= '? ';
+        }
+        return $values;
+    }
+
+    private function _checkTypeOfValues(array $data) {
+        foreach ($data as $item) {
+            $result[] = $item;
+        }
+        foreach($result as $type) {
+            $dataType[] = gettype($type);
+        }
+
+        return $dataType;
+    }
+
+
+    public function insert($table, array $data) {
+        $table = 'INSERT INTO `'.$table.'` (' .implode("` ", array_keys($data)). ')';
+
+
+        $numberOfValues = count($data);
+        $values = $this->_createValues($numberOfValues);
+
+        $dataType = $this->_checkTypeOfValues($data);
+        $letters = '';
+        //getting first letter from each of value type
+        foreach($dataType as $word) {
+            $letter = substr($word, 0, 1);
+            $letters .= $letter;
+        }
+
+        $dataValues = (count($data) >= 1) ? ' VALUES ('.$values.')' : '';
+        $sql= $table.$dataValues;
+        error_log($table, 0, '/vagrant/error_log');
+
+        $stmt = self::$_db->stmt_init();
+
+        if($stmt->prepare($sql)) {
+            $letters = '\''.$letters.'\'';
+            $stmt->bind_param($letters, implode(array_keys(" $", $data)));
+            $stmt->execute();
+            $stmt->close();
+        }
+        else
+            throw new  Exception("Error: " .$stmt->error);
     }
 
     public function delete($table, $where) {
