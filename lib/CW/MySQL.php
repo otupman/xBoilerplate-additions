@@ -4,6 +4,7 @@
  */
 class CW_MySQL
 {
+    //TODO: currently all exceptions are Exception; need to create a MySQLException class once all error scenarios are found
 
     protected static $_object = null;
     protected static $_db = null;
@@ -30,21 +31,51 @@ class CW_MySQL
         }
         return self::$_object;
     }
-
+    const NO_WHERE = null;
+    const NO_ORDER = null;
+    const NO_LIMIT = null;
+    const NO_OBJECT = 'stdClass';
     /**
      * @param $table
      * @param $attrs
      * @param array $where
      * @return mixed
      */
-    public function select($table, $attrs, $where = null, $order = null) {
+    public function select($columns, $table, $where = self::NO_WHERE, $order =self::NO_ORDER, $limit = self::NO_LIMIT,
+                           $className = self::NO_OBJECT)
+    {
+        $columnFragment = implode(', ', $columns);
+        $containsSelectAsterisk = stripos($columnFragment, '*') != -1;
+        if($containsSelectAsterisk) {
+            throw new Exception('Select * is not allowed');
+        }
+        $query = 'SELECT ' . $columnFragment . ' \n';
+        $query.= 'FROM ' . $table . ' \n';
 
-        $sth = $dbh->prepare('SELECT ? FROM ? WHERE ?');
-        $sth->bindValue(1, $calories, PDO::PARAM_INT);
-        $sth->bindValue(2, $colour, PDO::PARAM_STR);
-        $sth->execute();
+        $statement = self::$_db->prepare($query);
+        if($statement === false) {
+            throw self::createQueryException('Could not prepare query', self::$_db, $query);
+        }
 
+        if(!$statement->execute()) {
+            throw self::createQueryException('Error executing query', $statement, $query);
+        }
+
+        $result = $statement->get_result();
+        if($result === false) {
+            throw self::createQueryException('Error getting results', $statement, $query);
+        }
+        $results = array();
+        foreach($result->fetch_object($className) as $row) {
+            $results[] = $row;
+        }
+        return $results;
     }
+
+    private static function createQueryException($message, $dbObject, $query) {
+        throw new Exception($message . ', error: ' . $dbObject->error . ' for query: ' . $query);
+    }
+
 
     public function insert($table, array $data) {
 

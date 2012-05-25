@@ -105,6 +105,13 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
         $this->assertObjectHasAttribute('lastname', $barney, 'All-column select should contain column lastname');
 
     }
+    /**
+     * Tests for field and value selects that contain DB keywords such as
+     * DATABASE
+     */
+    public function testKeywordSelect() {
+        throw new Exception("Not yet implemented.");
+    }
 
     public function testSelectLimit() {
         // SELECT firstname FROM people LIMIT 1
