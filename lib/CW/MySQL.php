@@ -1,6 +1,28 @@
 <?php
 /**
- * Initial blank version, ready for update.
+ * CW_MySQL - Simplified database access class to provide quick, easy and secure queries.
+ *
+ * The MySQL class is intended to provide clients with a simplified set of SQL queries that should cover 80% of use
+ * cases. It also provides more power via the query() method, where a custom query can be supplied - however, it is
+ * expected that this method is only used as a last resort. For Centralwayers, using it will mean you're asked to
+ * justify *why* you are using it!
+ *
+ * The standard SQL operations are available:
+ *  select()
+ *  update()
+ *  insert()
+ *
+ * The following additional operations are available:
+ *  selectRow() - selects a single row, returning the first result
+ *
+ * The following operations are *not* available:
+ *  delete() - hard-deleting is not recommended, consider using a soft delete (i.e. a boolean column called isDeleted)
+ *
+ * More information can be found on github's wiki
+ *
+ * @author Oliver Tupman <oliver.tupman@centralway.com>
+ * @version 0.1
+ *
  */
 
 class CW_MySQL
@@ -41,13 +63,49 @@ class CW_MySQL
     private static $VALID_OPERATORS = array(
         '>', '<', '=', '!='
     );
+
+    private function createWhere($where) {
+        $whereClause = new WhereClause();
+        if($where == self::NO_WHERE) {
+            return $whereClause; // Early exit if no where clause
+        }
+
+        foreach($where as $columnName => $columnValue) {
+            $name = trim($columnName);
+            $needsEquals = stripos($name, ' ') === false;
+            if($needsEquals) {
+                $name .= ' =';
+            }
+            $name .= ' ? ';
+            $targetType = $this->getType($columnValue);
+            $value = $this->convertValue($columnValue, $targetType);
+            $whereClause->addClause($name, $targetType, $value);
+        }
+
+        return $whereClause;
+    }
+
+    //TODO: This needs to handle type hinting
+    private function convertValue($value, $targetType) {
+        if($value instanceof DateTime) {
+            return $value->format('Y-m-d H:i:s');
+        }
+        else {
+            return $value; // No conversion necessary
+        }
+    }
+
     /**
+     *
+     *
+     * @param $columns
      * @param $table
-     * @param $attrs
      * @param array $where
+     * @param order
+     * @param limit
      * @return mixed
      */
-    public function select($columns, $table, $where = self::NO_WHERE, $order =self::NO_ORDER, $limit = self::NO_LIMIT,
+    public function select($columns, $table, $where = self::NO_WHERE, $order = self::NO_ORDER, $limit = self::NO_LIMIT,
                            $className = self::NO_OBJECT)
     {
         $columnFragment = implode(', ', $columns);
@@ -56,25 +114,31 @@ class CW_MySQL
             throw new Exception('Select * is not allowed');
         }
 
-        $whereClauses = array();
-
-        if($where != self::NO_WHERE) {
-            if(!is_array($where)) {
-                throw new Exception('Where clause must be an array');
-            }
-            foreach($where as $column => $columnValue) {
-                $column = trim($column);
-                $hasOperator = stripos($column, ' ') != -1;
-            }
-        }
+        $whereClause = $this->createWhere($where);
 
         $query = 'SELECT ' . $columnFragment . ' ';
         $query.= 'FROM ' . $table . ' ';
+        if(!$whereClause->isEmpty()) {
+            $query.= 'WHERE ';
+            $query.= implode(' AND ', $whereClause->getConditions());
+        }
 //        user_error('Preparing query '. $query);
-
+        echo 'select() - Preparing this query: ' . $query;
         $statement = self::$_db->prepare($query);
         if($statement === false) {
             throw self::createQueryException('Could not prepare query', self::$_db, $query);
+        }
+
+        if(!$whereClause->isEmpty()) {
+            $values = array();
+            foreach($whereClause->getValues() as $value) {
+                $values[] = &$value;
+            }
+            $typeList = $whereClause->getTypeList();
+            $functionParams = array_merge(array(&$typeList), $values);
+            echo 'Calling function ';
+            var_dump($functionParams);
+            call_user_func_array(array($statement, 'bind_param'), $functionParams);
         }
 
         return $this->executeStatement($statement, $query, $className);
@@ -90,7 +154,7 @@ class CW_MySQL
                 return 's';
             case 'object':
                 if($value instanceof DateTime) {
-                    return 'd';
+                    return 's';
                 }
                 else {
                     // Unsupported object type
@@ -98,6 +162,7 @@ class CW_MySQL
                 }
             default:
                 throw new Exception('Unsupported type: ' . gettype($value));
+
         }
     }
 
@@ -142,5 +207,41 @@ class CW_MySQL
 
     public function getLastInsertId() {
         return self::$_db->insert_id;
+    }
+}
+
+
+class WhereClause {
+    private $_typeList;
+    private $_values;
+    private $_conditions;
+
+    public function __construct() {
+        $this->_typeList = '';
+        $this->_conditions = array();
+        $this->_values = array();
+    }
+
+    public function addClause($condition, $type, $value) {
+        $this->_conditions[] = $condition;
+        $this->_values[] = $value;
+        $this->_typeList .= $type;
+        return $this;
+    }
+
+    public function getTypeList() {
+        return $this->_typeList;
+    }
+
+    public function getValues() {
+        return $this->_values;
+    }
+
+    public function getConditions() {
+        return $this->_conditions;
+    }
+
+    public function isEmpty() {
+        return sizeof($this->_conditions) == 0;
     }
 }

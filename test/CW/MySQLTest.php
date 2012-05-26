@@ -196,11 +196,11 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
         $barneyOnly = CW_MySQL::getInstance()->select(array('firstname'), 'people', array('age > ' => 11));
 
         $this->assertEquals(2, sizeof($barneyOnly));
-        $this->assertEquals('Barney', $barneyOnly[0]['firstname'], 'Barney should be the only result returned');
+        $this->assertEquals('Barney', $barneyOnly[0]->firstname, 'Barney should be the only result returned');
 
         // SELECT firstname FROM people WHERE age < 20 AND createdDate > 2000-01-01
         $youngerUsers = CW_MySQL::getInstance()->select(array('firstname'), 'people',
-            array('age < ' => 20, 'createdDate >' => date_create('2001-01-01')) // Implicit AND
+            array('age < ' => 20, 'createdDate >' => new DateTime('2001-01-01')) // Implicit AND
         );
 
         //TODO: Add a selectOr() method?
@@ -222,6 +222,16 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
             CW_MySQL::getInstance()->select(array('firstname'), 'people', array('firstname > 5' => 'Bob'));
             $this->fail('Expected exception due to bad WHERE clause: "firstname > 5"');
         } catch(Exception $ex) { /* Expected */ }
+    }
+
+    /**
+     * Tests retrieving data when the data type of the data does not match the DB data type.
+     *
+     * Example: DateTime() to on a DATETIME column as opposed to a TIMESTAMP. TIMESTAMP needs a different
+     * format.
+     */
+    public function testSelectWithTypes() {
+        throw new Exception('Not implemented yet');
     }
 
     public function testSelectWithSort() {
