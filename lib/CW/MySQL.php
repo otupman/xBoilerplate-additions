@@ -76,8 +76,9 @@ class CW_MySQL extends ArrayObject
         $values = '';
 
         for($i=1; $i <= $numberOfValues; $i++) {
-            $values .= '? ';
+            $values .= '?, ';
         }
+        $values = substr($values, 0, -2);
         return $values;
     }
 
@@ -94,8 +95,17 @@ class CW_MySQL extends ArrayObject
 
 
     public function insert($table, array $data) {
-        $table = 'INSERT INTO `'.$table.'` (' .implode("` ", array_keys($data)). ')';
 
+        //create prepare statement, etc. INSERT INTO `people` (`firstname`, `lastname`, `age`, `createdDate`) VALUES (?, ?, ?, ?)
+        $keys = array_keys($data);
+        $dbColumnName = '(';
+        foreach($keys as $key) {
+            $dbColumnName .= '`'.$key.'`, ';
+        }
+        $dbColumnName = substr($dbColumnName, 0, -2);
+        $dbColumnName .= ')';
+
+        $table = 'INSERT INTO `'.$table.'` ' .$dbColumnName;
 
         $numberOfValues = count($data);
         $values = $this->_createValues($numberOfValues);
@@ -110,14 +120,39 @@ class CW_MySQL extends ArrayObject
 
         $dataValues = (count($data) >= 1) ? ' VALUES ('.$values.')' : '';
         $sql= $table.$dataValues;
-        error_log($table, 0, '/vagrant/error_log');
 
+        //$stmt initialization
         $stmt = self::$_db->stmt_init();
-
         if($stmt->prepare($sql)) {
             $letters = '\''.$letters.'\'';
-            $stmt->bind_param($letters, implode(array_keys(" $", $data)));
-            $stmt->execute();
+            $d = array_keys($data);
+
+            $variables = '';
+            foreach($d as $i) {
+                $variables .= '$'.$i .', ';
+            }
+            $variables = substr($variables, 0, -2);
+
+            $bindparams = $letters .", " .$variables;
+            print $bindparams; //'ssii', $firstname, $lastname, $age, $createdDate
+            $stmt->bind_param('ssii', $firstname, $lastname, $age, $createdDate); //added from print $bindparams
+
+            //to do
+            print(print_r($data));
+
+            $firstname = 'TOM';
+            $lastname = 'Tomson';
+            $age = 22;
+            $createdDate = 1338227241;
+
+            $result = $stmt->execute();
+
+           if (true === $result) {
+                print 'EXICUTE TRUE!!!!!!!!!!!!!!'; //just for test
+            }
+            else
+                throw new Exception('Error: ' .$stmt->error);
+
             $stmt->close();
         }
         else
