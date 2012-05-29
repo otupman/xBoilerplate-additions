@@ -4,17 +4,12 @@
  */
 class CW_MySQL extends ArrayObject
 {
-
     protected static $_object = null;
     protected static $_db = null;
 
     public function __construct() {
         //self::$_db = new mysqli($config['host'], $config['username'], $config['password'], $config['db']);
         self::$_db = new mysqli('localhost', 'root', '', 'xBoilerplate_additions');
-
-
-
-
     }
 
     /**
@@ -43,33 +38,46 @@ class CW_MySQL extends ArrayObject
      */
     public function select(array $attrs, $table, array $where = null, $order = null) {
 
-//        $b = new ArrayObject();
-//        $results = array();
-//        if($where == null && $order == null) {
-//            $atrib = (count($attrs) >= 1) ? 'SELECT '.implode(", ", $attrs) : '';
-//            $table = ' FROM '.$table;
-//            $query = $atrib.$table;
-//
-//
-//            if($results = self::$_db->prepare($query)) {
-//                $results->execute();
-//                while($obj = $results->fetch_object()) {
-//                    $results[] = $obj;
-//                }
-//            }
-//            return $results;
+        if($where == null && $order == null) {
+            $atrib = (count($attrs) >= 1) ? 'SELECT '.implode(", ", $attrs) : '';
+            $table = ' FROM '.$table;
+            $query = $atrib.$table;
+            $stmt = self::$_db->prepare($query);
 
-//            $stmt = self::$_db->prepare($sql);
-//            if ($stmt === false) {
-//                throw new Exception('Errror! ' .self::$_db->error);
-//                error_log('asdasdasdasdasdasdasdasdasd', 0, '/vagrant/error_log');
-//            }
-//            $data = $stmt->execute();
-//            $bindResultParameters = (count($attrs) >= 1) ? '$'.implode(", $", $attrs) : '';
-//            $stmt->bind_result($bindResultParameters);
-//            error_log($data, 0, '/vagrant/error_log');
-//
-//        }
+            if($stmt === false) {
+                throw new Exception('Error preparing: ' . self::$_db->error);
+            }
+            if(!$stmt->execute()) {
+                throw new Exception('Error executing: '. $stmt->error);
+            }
+
+            $result = $stmt->get_result();
+
+            if($result === false) {
+                throw new Exception('Error getting result: ' . $stmt->error);
+            }
+
+            $rows = array();
+
+            while(($row = $result->fetch_object()) != null) {
+                $rows[] = $row;
+
+            }
+            return $rows;
+        }
+        if($order == null){
+            $atrib = (count($attrs) >= 1) ? 'SELECT '.implode(", ", $attrs) : '';
+            $table = ' FROM '.$table;
+            $wheres = ' WHERE ' .implode( array_keys($where));
+            $wheres .= '=' .implode($where);
+
+            $sql = $atrib.$table.$wheres;
+
+            print $sql;
+
+        }
+
+
     }
 
     private function _createValues($numberOfValues) {
@@ -95,7 +103,6 @@ class CW_MySQL extends ArrayObject
 
 
     public function insert($table, array $data) {
-
         //create prepare statement, etc. INSERT INTO `people` (`firstname`, `lastname`, `age`, `createdDate`) VALUES (?, ?, ?, ?)
         $keys = array_keys($data);
         $dbColumnName = '(';
@@ -111,11 +118,11 @@ class CW_MySQL extends ArrayObject
         $values = $this->_createValues($numberOfValues);
 
         $dataType = $this->_checkTypeOfValues($data);
-        $letters = '';
+        $type = '';
         //getting first letter from each of value type
         foreach($dataType as $word) {
             $letter = substr($word, 0, 1);
-            $letters .= $letter;
+            $type .= $letter;
         }
 
         $dataValues = (count($data) >= 1) ? ' VALUES ('.$values.')' : '';
@@ -123,31 +130,16 @@ class CW_MySQL extends ArrayObject
 
         //$stmt initialization
         $stmt = self::$_db->stmt_init();
-        if($stmt->prepare($sql)) {
-            $letters = '\''.$letters.'\'';
-            $d = array_keys($data);
 
-            $variables = '';
-            foreach($d as $i) {
-                $variables .= '$'.$i .', ';
-            }
-            $variables = substr($variables, 0, -2);
+        //prepare statement
+        if($sqlPrepare = $stmt->prepare($sql)) {
+            $letters = "'".$type."'";
 
-            $bindparams = $letters .", " .$variables;
-            print $bindparams; //'ssii', $firstname, $lastname, $age, $createdDate
-            $stmt->bind_param('ssii', $firstname, $lastname, $age, $createdDate); //added from print $bindparams
-
-            //to do
-            print(print_r($data));
-
-            $firstname = 'TOM';
-            $lastname = 'Tomson';
-            $age = 22;
-            $createdDate = 1338227241;
+            //bind param
+            //call_user_func_array(array($stmt, 'bind_param'), array($type, );
 
             $result = $stmt->execute();
-
-           if (true === $result) {
+            if (true === $result) {
                 print 'EXICUTE TRUE!!!!!!!!!!!!!!'; //just for test
             }
             else
