@@ -133,10 +133,12 @@ class CW_MySQL extends ArrayObject
 
         //prepare statement
         if($sqlPrepare = $stmt->prepare($sql)) {
-            $letters = "'".$type."'";
-
             //bind param
-            //call_user_func_array(array($stmt, 'bind_param'), array($type, );
+            $q = array();
+            foreach($data as $key=>$value) {
+                $q[] = &$value;
+            }
+            call_user_func_array(array($stmt, 'bind_param'), array_merge(array(&$type), $q));
 
             $result = $stmt->execute();
             if (true === $result) {
