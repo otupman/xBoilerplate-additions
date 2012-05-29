@@ -113,10 +113,11 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
      * DATABASE
      */
     public function testKeywordSelect() {
-        throw new Exception("Not yet implemented.");
+        $this->markTestIncomplete('This test is not yet implemented');
     }
 
-    public function testSelectLimit() {
+    public function testWithSelectLimit() {
+        $this->markTestIncomplete('This test is not yet implemented');
         // SELECT firstname FROM people LIMIT 1
         $onlyOneRow = CW_MySQL::getInstance()->select(array('firstname'), 'people', null, null, 1);
 
@@ -176,7 +177,7 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
     }
 
     public function testSelectRow() {
-        $this->fail('Not yet implemented');
+        $this->markTestIncomplete('This test is not yet implemented');
         //TODO Test the method selectRow() that will return only one row (object)
 
     }
@@ -231,10 +232,11 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
      * format.
      */
     public function testSelectWithTypes() {
-        throw new Exception('Not implemented yet');
+        $this->markTestIncomplete('This test is not yet implemented');
     }
 
     public function testSelectWithSort() {
+        $this->markTestIncomplete('This test is not yet implemented');
         // SELECT firstname FROM people ORDER BY age DESC
         $aliceFirst = CW_MySQL::getInstance()->select(array('firstname'), 'people', null, array('age' => 'DESC'));
 
@@ -244,7 +246,12 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
         $this->assertEquals('Barney', $barney['firstname']);
     }
 
+    public function testSelectWithDates() {
+        $this->markTestIncomplete('Test not yet complete');
+    }
+
     public function testInsert() {
+        $this->markTestIncomplete('This test is not yet implemented');
         $firstname = 'testInsert_' . time();
 
         // INSERT INTO people (firstname, lastname, age, createdDate, )
@@ -261,16 +268,46 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
     }
 
 
+
     public function testDelete() {
-        $this->fail('Test not implemented yet');
+        $this->markTestIncomplete('This test is not yet implemented');
     }
 
-    public function testUpdate() {
-        $this->fail('Test not implemented yet');
+    public function testUpdateNormal() {
+        // UPDATE people SET firstname = 'Fred' WHERE firstname = 'fred'
+        $fredsNewName = 'Fred';
+        $numRowsChanged = CW_MySQL::getInstance()->update(
+            'people', array('firstname' => $fredsNewName), array('age' => 11)//, array('firstname' => 'fred')
+        );
+
+        $this->assertEquals(1, $numRowsChanged, '1 row should have been modified ("fred")');
+
+        $updatedRows = CW_MySQL::getInstance()->select(
+            array('firstname'), 'people', array('age'=>11)
+        );
+        $this->assertEquals(1, sizeof($updatedRows));
+
+        $fred = $updatedRows[0];
+
+        $this->assertEquals($fredsNewName, $fred->firstname);
+
+    }
+
+    public function testUpdate_badParameters() {
+        $this->markTestIncomplete('This test is not yet implemented');
+        try {
+            CW_MySQL::getInstance()->update('people', array('firstname' => 'Fred'), null);
+            $this->fail('Expected exception when using null where clause');
+        } catch(Exception $ex) { /* Expected */ }
+
+        try {
+            CW_MySQL::getInstance()->update('people', array('firstname' => 'Fred'), array());
+            $this->fail('Expected exception when using an empty array for where');
+        } catch(Exception $ex) { /* Expected */ }
     }
 
     public function testQuery() {
-        $this->fail('Test not implemented yet');
+        $this->markTestIncomplete('This test is not yet implemented');
     }
 
     public function testLastInsertId() {
