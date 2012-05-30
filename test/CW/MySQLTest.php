@@ -306,14 +306,14 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
     }
 
     public function testInsert_simple() {
-        $this->markTestIncomplete('This test is not yet implemented');
         $firstname = 'testInsert_' . time();
 
         // INSERT INTO people (firstname, lastname, age, createdDate, )
         CW_MySQL::getInstance()->insert('people',
             array('firstname' => $firstname, 'lastname' => 'Test user', 'age' => 99, 'createdDate' => time()));
 
-        $result = $this->_db->query('SELECT firstname FROM people WHERE firstname = "' . $firstname . '"');
+
+        $result = $this->_db->query('SELECT firstname, age FROM people WHERE firstname = "' . $firstname . '"');
         $this->assertEquals(1, $result->num_rows, '1 result should be returned: just the recently-inserted test user');
 
         $testUser = $result->fetch_object();
@@ -329,11 +329,10 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
     }
 
     public function testUpdateNormal() {
-        $this->markTestIncomplete('Test not implemented yet');
         // UPDATE people SET firstname = 'Fred' WHERE firstname = 'fred'
         $fredsNewName = 'Fred';
         $numRowsChanged = CW_MySQL::getInstance()->update(
-            'people', array('firstname' => $fredsNewName), array('age' => 11)//, array('firstname' => 'fred')
+            'people', array('firstname' => $fredsNewName), array('age' => 11)
         );
 
         $this->assertEquals(1, $numRowsChanged, '1 row should have been modified ("fred")');
@@ -351,7 +350,6 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
 
 
     public function testUpdate_badParameters() {
-        $this->markTestIncomplete('This test is not yet implemented');
         try {
             CW_MySQL::getInstance()->update('people', array('firstname' => 'Fred'), null);
             $this->fail('Expected exception when using null where clause');
@@ -368,16 +366,19 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
     }
 
     public function testLastInsertId() {
-        $this->markTestIncomplete('Not yet implemented');
         CW_MySQL::getInstance()->insert('people',
             array('firstname' => 'testLastInsertId', 'lastname' => 'User', 'age' => 50, 'createdDate' => time()));
         $lastInsertId = CW_MySQL::getInstance()->getLastInsertId();
 
-        $lastInsertOnly = CW_MySQL::getInstance()->select('people', array('firstname' => 'testLastInsertId'));
-        $singleRow = $lastInsertOnly[0];
+        //$lastInsertOnly = CW_MySQL::getInstance()->select('people', array('firstname' => 'testLastInsertId'));
+        $results = CW_MySQL::getInstance()->query('SELECT id, firstname FROM people WHERE id=' . $lastInsertId);
+        $this->assertEquals(1, $results->num_rows, 'No row found by ID ' . $lastInsertId);
+        $singleRow = $results->fetch_object();
 
-        $this->assertEquals($singleRow['id'], $lastInsertId, 'Insert ID from class does not match actual from database.');
+        $this->assertEquals($singleRow->id, $lastInsertId, 'Insert ID from class does not match actual from database.');
+        $this->assertEquals('testLastInsertId', $singleRow->firstname, 'Inserted name does not match row retrieved via inserted ID');
     }
+
 }
 /**
  * This class is here to test retrieving data with a custom class rather than stdClass.
