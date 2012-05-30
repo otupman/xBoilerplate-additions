@@ -275,7 +275,7 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
 
     public function testUpdateNormal() {
         // UPDATE people SET firstname = 'Fred' WHERE firstname = 'fred'
-        $fredsNewName = 'Fred';
+        $fredsNewName = 'LaLinea';
         $numRowsChanged = CW_MySQL::getInstance()->update(
             'people', array('firstname' => $fredsNewName), array('age' => 11)//, array('firstname' => 'fred')
         );
