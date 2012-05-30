@@ -10,10 +10,9 @@ set_include_path(
 );
 
 function xBoilerplate_additions_autoload($class) {
-    if (substr($class, 0, 2) == 'CW') {
-        $file = str_replace('_', '/', $class) . '.php';
-        require_once $file;
-    }
+    $file = str_replace('_', '/', $class) . '.php';
+    require_once $file;
 }
+
 
 spl_autoload_register('xBoilerplate_additions_autoload');

@@ -5,7 +5,7 @@
  * Date: 21/05/2012
  * Time: 09:23
  */
-
+require_once('../bootstrap.php');
 class CW_MySQLTest extends PHPUnit_Framework_TestCase
 {
     private $config;
@@ -20,6 +20,7 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
     private $alice;
 
     public function setup() {
+       // error_reporting(E_ALL);
         $this->config = array();
         //TODO: these settings should come from the containing phpunit
         $this->config['db'] = array(
@@ -96,17 +97,27 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
      */
     public function testSimplestSelect() {
         // Simple SELECT firstname, lastname FROM people
-        $people = CW_MySQL::getInstance()->select(array('firstname', 'lastname'), 'people');
+        $people = CW_MySQL::getInstance()->select(array('id','firstname', 'lastname'), 'people');
 
-        $this->assertEquals(2, sizeof($people), 'Incorrect number of rows returned');
+        $this->assertEquals(3, sizeof($people), 'Incorrect number of rows returned');
 
-        $barney = $people[0];
-        $this->assertEquals($this->barney['firstname'], $barney->firstname, 'First name is incorrect');
-        $this->assertObjectHasAttribute('lastname', $barney, 'All-column select should contain column lastname');
+        $fred = $people[0];
+        $this->assertInstanceOf('stdClass', $fred, 'Rows should be objects');
+        $this->assertObjectHasAttribute('firstname', $fred, 'First row should have property firstname');
+        $this->assertEquals($this->fred['firstname'], $fred->firstname, 'First name is incorrect');
+        $this->assertObjectHasAttribute('lastname', $fred, 'All-column select should contain column lastname');
 
     }
+    /**
+     * Tests for field and value selects that contain DB keywords such as
+     * DATABASE
+     */
+    public function testKeywordSelect() {
+        $this->markTestIncomplete('This test is not yet implemented');
+    }
 
-    public function testSelectLimit() {
+    public function testWithSelectLimit() {
+        $this->markTestIncomplete('This test is not yet implemented');
         // SELECT firstname FROM people LIMIT 1
         $onlyOneRow = CW_MySQL::getInstance()->select(array('firstname'), 'people', null, null, 1);
 
@@ -156,17 +167,17 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
 
         $this->assertObjectNotHasAttribute('lastname', $people[0], 'Lastname should not be present but is');
         $this->assertObjectHasAttribute('firstname', $people[0], 'First name should be present but is not');
-        $fred = $people[1];
-        $this->assertEquals($this->fred['lastname'], $fred['lastname'], 'Lastname value incorrect');
+        $fred = $people[0];
+        $this->assertEquals($this->fred['firstname'], $fred->firstname, 'Firstname value incorrect');
 
         // SELECT id, lastname FROM people
         $people = CW_MySQL::getInstance()->select(array('id', 'lastname'), 'people');
 
-        $this->assertObjectHasAttribute('firstname', $people[0], 'Firstname should not be present, just: id, lastname');
+        $this->assertObjectNotHasAttribute('firstname', $people[0], 'Firstname should not be present, just: id, lastname');
     }
 
     public function testSelectRow() {
-        $this->fail('Not yet implemented');
+        $this->markTestIncomplete('This test is not yet implemented');
         //TODO Test the method selectRow() that will return only one row (object)
 
     }
@@ -186,11 +197,11 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
         $barneyOnly = CW_MySQL::getInstance()->select(array('firstname'), 'people', array('age > ' => 11));
 
         $this->assertEquals(2, sizeof($barneyOnly));
-        $this->assertEquals('Barney', $barneyOnly[0]['firstname'], 'Barney should be the only result returned');
+        $this->assertEquals('Barney', $barneyOnly[0]->firstname, 'Barney should be the only result returned');
 
         // SELECT firstname FROM people WHERE age < 20 AND createdDate > 2000-01-01
         $youngerUsers = CW_MySQL::getInstance()->select(array('firstname'), 'people',
-            array('age < ' => 20, 'createdDate >' => date_create('2001-01-01')) // Implicit AND
+            array('age < ' => 20, 'createdDate >' => new DateTime('2001-01-01')) // Implicit AND
         );
 
         //TODO: Add a selectOr() method?
@@ -199,17 +210,48 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
 
     }
 
+    /**
+     * Tests the where clause processing to ensure that bad operators are picked up
+     */
+    public function testBadWhere() {
+        try {
+            CW_MySQL::getInstance()->select(array('firstname'), 'people', array('firstname X' => 'Bob'));
+            $this->fail('Expected exception due to an invalid operator "X"');
+        } catch(Exception $ex) { /* Expected */ }
+
+        try {
+            CW_MySQL::getInstance()->select(array('firstname'), 'people', array('firstname > 5' => 'Bob'));
+            $this->fail('Expected exception due to bad WHERE clause: "firstname > 5"');
+        } catch(Exception $ex) { /* Expected */ }
+    }
+
+    /**
+     * Tests retrieving data when the data type of the data does not match the DB data type.
+     *
+     * Example: DateTime() to on a DATETIME column as opposed to a TIMESTAMP. TIMESTAMP needs a different
+     * format.
+     */
+    public function testSelectWithTypes() {
+        $this->markTestIncomplete('This test is not yet implemented');
+    }
+
     public function testSelectWithSort() {
+        $this->markTestIncomplete('This test is not yet implemented');
         // SELECT firstname FROM people ORDER BY age DESC
         $aliceFirst = CW_MySQL::getInstance()->select(array('firstname'), 'people', null, array('age' => 'DESC'));
 
         $alice = $aliceFirst[0];
-        $this->assertEquals($this->alice['firstname'], $alice['firstname']);
+        $this->assertEquals($this->alice['firstname'], $alice->firstname);
         $barney = $aliceFirst [1];
         $this->assertEquals('Barney', $barney['firstname']);
     }
 
+    public function testSelectWithDates() {
+        $this->markTestIncomplete('Test not yet complete');
+    }
+
     public function testInsert() {
+        $this->markTestIncomplete('This test is not yet implemented');
         $firstname = 'testInsert_' . time();
 
         // INSERT INTO people (firstname, lastname, age, createdDate, )
@@ -226,16 +268,46 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
     }
 
 
+
     public function testDelete() {
-        $this->fail('Test not implemented yet');
+        $this->markTestIncomplete('This test is not yet implemented');
     }
 
-    public function testUpdate() {
-        $this->fail('Test not implemented yet');
+    public function testUpdateNormal() {
+        // UPDATE people SET firstname = 'Fred' WHERE firstname = 'fred'
+        $fredsNewName = 'Fred';
+        $numRowsChanged = CW_MySQL::getInstance()->update(
+            'people', array('firstname' => $fredsNewName), array('age' => 11)//, array('firstname' => 'fred')
+        );
+
+        $this->assertEquals(1, $numRowsChanged, '1 row should have been modified ("fred")');
+
+        $updatedRows = CW_MySQL::getInstance()->select(
+            array('firstname'), 'people', array('age'=>11)
+        );
+        $this->assertEquals(1, sizeof($updatedRows));
+
+        $fred = $updatedRows[0];
+
+        $this->assertEquals($fredsNewName, $fred->firstname);
+
+    }
+
+    public function testUpdate_badParameters() {
+        $this->markTestIncomplete('This test is not yet implemented');
+        try {
+            CW_MySQL::getInstance()->update('people', array('firstname' => 'Fred'), null);
+            $this->fail('Expected exception when using null where clause');
+        } catch(Exception $ex) { /* Expected */ }
+
+        try {
+            CW_MySQL::getInstance()->update('people', array('firstname' => 'Fred'), array());
+            $this->fail('Expected exception when using an empty array for where');
+        } catch(Exception $ex) { /* Expected */ }
     }
 
     public function testQuery() {
-        $this->fail('Test not implemented yet');
+        $this->markTestIncomplete('This test is not yet implemented');
     }
 
     public function testLastInsertId() {
