@@ -55,7 +55,7 @@ class CW_MySQL
         }
         return self::$_object;
     }
-     const NO_WHERE = null;
+    const NO_WHERE = null;
     const NO_ORDER = null;
     const NO_LIMIT = null;
     const NO_OBJECT = 'stdClass';
@@ -178,14 +178,11 @@ class CW_MySQL
         }
 
 
-        print_r($whereClause->getValues());
-
         if(!$whereClause->isEmpty()) {
             $values = array();
             foreach($whereClause->getValues() as $value) {
                 $values[] = &$value;
             }
-            print_r($values);
             $typeList = $whereClause->getTypeList();
             $functionParams = array_merge(array(&$typeList), $values);
 
@@ -248,7 +245,7 @@ class CW_MySQL
             case 'string':
                 return 's';
             case 'object':
-               return $this->getObjectType($value, $typeHint);
+                return $this->getObjectType($value, $typeHint);
             default:
                 throw new Exception('Unsupported type: ' . gettype($value));
         }
@@ -320,7 +317,7 @@ class CW_MySQL
     }
 
 
-    
+
     public function insert($table, array $data) {
         //create prepare statement, etc. INSERT INTO `people` (`firstname`, `lastname`, `age`, `createdDate`) VALUES (?, ?, ?, ?)
         $keys = array_keys($data);
@@ -365,7 +362,7 @@ class CW_MySQL
 
             $result = $stmt->execute();
             if (true === $result) {
-                   return ($stmt->insert_id);
+                return ($stmt->insert_id);
             }
             else {
                 throw new Exception('Error: ' .$stmt->error);
@@ -381,47 +378,47 @@ class CW_MySQL
     }
 
     public function update($table, array $data, array $where) {
-            $columnNames = array_keys($data);
-            $variablesSet = '';
-            foreach($columnNames as $item) {
-                $variablesSet .= $item .'=?, ';
+        $columnNames = array_keys($data);
+        $variablesSet = '';
+        foreach($columnNames as $item) {
+            $variablesSet .= $item .'=?, ';
+        }
+        $variablesSet = substr($variablesSet, 0, -2);
+
+        $whereNames = array_keys($where);
+        $variableWhere = '';
+        foreach($whereNames as $item) {
+            $variableWhere .=$item .'=? ';
+        }
+        $variableWhere = substr($variableWhere, 0, -1);
+
+        $update = 'UPDATE '.$table;
+        $set = ' SET ' .$variablesSet;
+        $whereP = ' WHERE ' .$variableWhere;
+        $sql = $update.$set.$whereP;
+
+        if($stmt = self::$_db->prepare($sql)) {
+            $dataType = $this->_checkTypeOfValues($data);
+            $type = '';
+            //getting first letter from each of value type
+            foreach($dataType as $word) {
+                $letter = substr($word, 0, 1);
+                $type .= $letter;
             }
-            $variablesSet = substr($variablesSet, 0, -2);
 
-            $whereNames = array_keys($where);
-            $variableWhere = '';
-            foreach($whereNames as $item) {
-                $variableWhere .=$item .'=? ';
+            //bind param
+            $q = array();
+            foreach($data as $key=>$value) {
+                $q[] = &$value;
             }
-            $variableWhere = substr($variableWhere, 0, -1);
 
-            $update = 'UPDATE '.$table;
-            $set = ' SET ' .$variablesSet;
-            $whereP = ' WHERE ' .$variableWhere;
-            $sql = $update.$set.$whereP;
+            //call_user_func_array(array($stmt, 'bind_param'), array_merge(array(&$type), $q));
 
-            if($stmt = self::$_db->prepare($sql)) {
-                $dataType = $this->_checkTypeOfValues($data);
-                $type = '';
-                //getting first letter from each of value type
-                foreach($dataType as $word) {
-                    $letter = substr($word, 0, 1);
-                    $type .= $letter;
-                }
-
-                //bind param
-                $q = array();
-                foreach($data as $key=>$value) {
-                    $q[] = &$value;
-                }
-                print(print_r(array_merge(array(&$type), $q)));
-                //call_user_func_array(array($stmt, 'bind_param'), array_merge(array(&$type), $q));
-
-                $stmt->execute();
-            }
-            else {
-                throw new Exception('Error preparing: ' . self::$_db->error);
-            }
+            $stmt->execute();
+        }
+        else {
+            throw new Exception('Error preparing: ' . self::$_db->error);
+        }
     }
 
     public function getLastInsertId() {

@@ -322,19 +322,15 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
 
         $this->assertEquals($singleRow['id'], $lastInsertId, 'Insert ID from class does not match actual from database.');
     }
-
-    public function testVegan() {
-        $a = array('one', 22, 'ddd', 33);
-        $b = array();
-
-
-        foreach($a as $i) {
-            $b[] = &$i;
-        }
-        print_r($b);
-
-
-
-
-    }
+//
+//    public function testVegan() {
+//        $a = array('one', 22, 'ddd', 33);
+//        $b = array();
+//
+//
+//        foreach($a as $i) {
+//            $b[] = &$i;
+//        }
+//        print_r($b);
+//    }
 }
