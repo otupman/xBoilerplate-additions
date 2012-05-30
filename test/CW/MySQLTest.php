@@ -251,20 +251,20 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
     }
 
     public function testInsert() {
-        $this->markTestIncomplete('This test is not yet implemented');
+        //$this->markTestIncomplete('This test is not yet implemented');
         $firstname = 'testInsert_' . time();
 
         // INSERT INTO people (firstname, lastname, age, createdDate, )
         CW_MySQL::getInstance()->insert('people',
             array('firstname' => $firstname, 'lastname' => 'Test user', 'age' => 99, 'createdDate' => time()));
 
-        $testUserOnly = CW_MySQL::getInstance()->select(array('firstname'), 'people', array('firstname' => $firstname));
+        $testUserOnly = CW_MySQL::getInstance()->select(array('firstname', 'age'), 'people', array('firstname' => $firstname));
         $this->assertEquals(1, sizeof($testUserOnly), '1 result should be returned: just the recently-inserted test user');
 
         $testUser = $testUserOnly[0];
 
-        $this->assertEquals($firstname, $testUserOnly['firstname'], 'First name does not match');
-        $this->assertEquals(99, $testUserOnly['age'], 'Age does not match');
+        $this->assertEquals($firstname, $testUser->firstname, 'First name does not match');
+        $this->assertEquals(99, $testUser->age, 'Age does not match');
     }
 
 
@@ -322,4 +322,15 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
 
         $this->assertEquals($singleRow['id'], $lastInsertId, 'Insert ID from class does not match actual from database.');
     }
+//
+//    public function testVegan() {
+//        $a = array('one', 22, 'ddd', 33);
+//        $b = array();
+//
+//
+//        foreach($a as $i) {
+//            $b[] = &$i;
+//        }
+//        print_r($b);
+//    }
 }

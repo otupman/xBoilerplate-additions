@@ -177,6 +177,7 @@ class CW_MySQL
             throw self::createQueryException('Could not prepare query', self::$_db, $query);
         }
 
+
         if(!$whereClause->isEmpty()) {
             $values = array();
             foreach($whereClause->getValues() as $value) {
@@ -244,7 +245,7 @@ class CW_MySQL
             case 'string':
                 return 's';
             case 'object':
-               return $this->getObjectType($value, $typeHint);
+                return $this->getObjectType($value, $typeHint);
             default:
                 throw new Exception('Unsupported type: ' . gettype($value));
         }
@@ -294,68 +295,130 @@ class CW_MySQL
             . ' for query: '
             . $query);
     }
+    private function _createValues($numberOfValues) {
+        $values = '';
+
+        for($i=1; $i <= $numberOfValues; $i++) {
+            $values .= '?, ';
+        }
+        $values = substr($values, 0, -2);
+        return $values;
+    }
+
+    private function _checkTypeOfValues(array $data) {
+        foreach ($data as $item) {
+            $result[] = $item;
+        }
+        foreach($result as $type) {
+            $dataType[] = gettype($type);
+        }
+
+        return $dataType;
+    }
+
 
 
     public function insert($table, array $data) {
+        //create prepare statement, etc. INSERT INTO `people` (`firstname`, `lastname`, `age`, `createdDate`) VALUES (?, ?, ?, ?)
+        $keys = array_keys($data);
+        $dbColumnName = '(';
+        foreach($keys as $key) {
+            $dbColumnName .= '`'.$key.'`, ';
+        }
+        $dbColumnName = substr($dbColumnName, 0, -2);
+        $dbColumnName .= ')';
 
+        $table = 'INSERT INTO `'.$table.'` ' .$dbColumnName;
+
+        $numberOfValues = count($data);
+        $values = $this->_createValues($numberOfValues);
+
+        $dataType = $this->_checkTypeOfValues($data);
+        $type = '';
+        //getting first letter from each of value type
+        foreach($dataType as $word) {
+            $letter = substr($word, 0, 1);
+            $type .= $letter;
+        }
+
+        $dataValues = (count($data) >= 1) ? ' VALUES ('.$values.')' : '';
+        $sql= $table.$dataValues;
+
+        //$stmt initialization
+        $stmt = self::$_db->stmt_init();
+
+        //prepare statement
+        if($sqlPrepare = $stmt->prepare($sql)) {
+            $whereClause = $this->createParameters($data);
+
+            $values = array();
+            $v = $whereClause->getValues();
+            foreach($v as &$value) {
+                array_push($values, &$value);
+            }
+            $typeList = $whereClause->getTypeList();
+            $functionParams = array_merge(array(&$typeList), $values);
+            call_user_func_array(array($stmt, 'bind_param'), $functionParams);
+
+            $result = $stmt->execute();
+            if (true === $result) {
+                return ($stmt->insert_id);
+            }
+            else {
+                throw new Exception('Error: ' .$stmt->error);
+            }
+            $stmt->close();
+        }
+        else
+            throw new  Exception("Error: " .$stmt->error);
     }
 
     public function delete($table, $where) {
-
+        throw new  Exception("database successfully deleted");
     }
 
+    public function update($table, array $data, array $where) {
+        $columnNames = array_keys($data);
+        $variablesSet = '';
+        foreach($columnNames as $item) {
+            $variablesSet .= $item .'=?, ';
+        }
+        $variablesSet = substr($variablesSet, 0, -2);
 
+        $whereNames = array_keys($where);
+        $variableWhere = '';
+        foreach($whereNames as $item) {
+            $variableWhere .=$item .'=? ';
+        }
+        $variableWhere = substr($variableWhere, 0, -1);
 
-    /**
-     * @param $table
-     * @param array $updatedData
-     * @param $where
-     */
-    public function update($table, $updatedData, $where) {
-//        if($where == null || sizeof($where) == 0) {
-//            throw new Exception('Where must not be null or have 0 elements');
-//        }
-//        else if(array_key_exists('*', $where)
-//                || array_key_exists('true', $where)
-//                || array_key_exists('1', $where))
-//        {
-//            throw new Exception('Where may not be * or true');
-//        }
-//        if($updatedData == null || sizeof($updatedData) == 0) {
-//            throw new Exception('Data to update must not be null or have 0 elements');
-//        }
-//
-//        $whereParameters = $this->createParameters($where);
-//        $updateParameters = $this->createParameters($updatedData);
-//
-//        $query = 'UPDATE ' . $table;
-//        $query.= ' SET ' . implode(', ', $updateParameters->getConditions());
-//        $query.= ' WHERE ' . implode(', ', $whereParameters->getConditions());
-//
-//        $statement = self::$_db->prepare($query);
-//
-//        if($statement === false) {
-//            throw self::createQueryException('Error preparing update query', self::$_db, $query);
-//        }
-//
-//        $queryValues = array();
-//        foreach($updateParameters->getValues() as $value) {
-//            $queryValues[] = &$value;
-//        }
-//        foreach($whereParameters->getValues() as $value) {
-//            $queryValues[] = &$value;
-//        }
-//        $typeList = $updateParameters->getTypeList() . $whereParameters->getTypeList();
-//        $functionParams = array_merge(array(&$typeList), $queryValues);
-//
-//        call_user_func_array(array($statement, 'bind_param'), $functionParams);
-//
-//        if(!$statement->execute()) {
-//            throw self::createQueryException('Error executing update query', $statement, $query);
-//        }
-//
-//        return $statement->affected_rows;
-        throw new Exception('Not yet implemented - still working on it');
+        $update = 'UPDATE '.$table;
+        $set = ' SET ' .$variablesSet;
+        $whereP = ' WHERE ' .$variableWhere;
+        $sql = $update.$set.$whereP;
+
+        if($stmt = self::$_db->prepare($sql)) {
+            $dataType = $this->_checkTypeOfValues($data);
+            $type = '';
+            //getting first letter from each of value type
+            foreach($dataType as $word) {
+                $letter = substr($word, 0, 1);
+                $type .= $letter;
+            }
+
+            //bind param
+            $q = array();
+            foreach($data as $key=>$value) {
+                $q[] = &$value;
+            }
+
+            //call_user_func_array(array($stmt, 'bind_param'), array_merge(array(&$type), $q));
+
+            $stmt->execute();
+        }
+        else {
+            throw new Exception('Error preparing: ' . self::$_db->error);
+        }
     }
 
     public function getLastInsertId() {
