@@ -177,11 +177,15 @@ class CW_MySQL
             throw self::createQueryException('Could not prepare query', self::$_db, $query);
         }
 
+
+        print_r($whereClause->getValues());
+
         if(!$whereClause->isEmpty()) {
             $values = array();
             foreach($whereClause->getValues() as $value) {
                 $values[] = &$value;
             }
+            print_r($values);
             $typeList = $whereClause->getTypeList();
             $functionParams = array_merge(array(&$typeList), $values);
 
@@ -294,7 +298,26 @@ class CW_MySQL
             . ' for query: '
             . $query);
     }
+    private function _createValues($numberOfValues) {
+        $values = '';
 
+        for($i=1; $i <= $numberOfValues; $i++) {
+            $values .= '?, ';
+        }
+        $values = substr($values, 0, -2);
+        return $values;
+    }
+
+    private function _checkTypeOfValues(array $data) {
+        foreach ($data as $item) {
+            $result[] = $item;
+        }
+        foreach($result as $type) {
+            $dataType[] = gettype($type);
+        }
+
+        return $dataType;
+    }
     public function insert($table, array $data) {
         //create prepare statement, etc. INSERT INTO `people` (`firstname`, `lastname`, `age`, `createdDate`) VALUES (?, ?, ?, ?)
         $keys = array_keys($data);
@@ -326,18 +349,39 @@ class CW_MySQL
 
         //prepare statement
         if($sqlPrepare = $stmt->prepare($sql)) {
+            $whereClause = $this->createParameters($data);
             //bind param
-            $q = array();
-            foreach($data as $key=>$value) {
-                $q[] = &$value;
+//            $q = array();
+//            foreach($whereClause->getValues() as $value) {
+//                $q[] = &$value;
+//            }
+//            print(print_r($q));
+//            //TODO add exception
+//            call_user_func_array(array($stmt, 'bind_param'), array_merge(array(&$type), $q));
+
+
+
+            $values = array();
+            print 'Here!';
+            $v = $whereClause->getValues();
+            print_r($v);
+            print 'Here!';
+            foreach($v as &$value) {
+                array_push($values, &$value);
+               //&&[] = &$value;
             }
-            //TODO add exception
-            call_user_func_array(array($stmt, 'bind_param'), array_merge(array(&$type), $q));
+
+            print_r($values);
+            $typeList = $whereClause->getTypeList();
+            $functionParams = array_merge(array(&$typeList), $values);
+
+            call_user_func_array(array($stmt, 'bind_param'), $functionParams);
+
+
 
             $result = $stmt->execute();
             if (true === $result) {
-                //TODO return autoincrement ID
-                print 'EXICUTE TRUE!!!!!!!!!!!!!!'; //just for test
+                   return ($stmt->insert_id);
             }
             else
 
