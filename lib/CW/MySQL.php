@@ -18,7 +18,8 @@
  * The following operations are *not* available:
  *  delete() - hard-deleting is not recommended, consider using a soft delete (i.e. a boolean column called isDeleted)
  *
- * More information can be found on github's wiki
+ * More information can be found on github's wiki page here:
+ *  https://github.com/centralway/xBoilerplate-additions/wiki/MySQL
  *
  * @author Oliver Tupman <oliver.tupman@centralway.com>
  * @version 0.1
@@ -28,9 +29,37 @@
 class CW_MySQL
 {
     //TODO: currently all exceptions are Exception; need to create a MySQLException class once all error scenarios are found
-
+    /**
+     * the static instance of the class
+     * @var CW_MySQL
+     */
     protected static $_object = null;
+    /**
+     *
+     * The static mysqli instance that the class uses
+     *
+     * @var mysqli
+     */
     protected static $_db = null;
+
+    /** Optionally used to signal an empty where clause */
+    const NO_WHERE = null;
+    /** Optionally used to signal an empty order instruction  */
+    const NO_ORDER = null;
+    /** Optionally used to signal that there is no limit set on the query */
+    const NO_LIMIT = null;
+    /** The default class instantiated to return results with */
+    const STANDARD_CLASS = 'stdClass';
+
+    /** Sort operator: ascending */
+    const OP_ASC = 'ASC';
+    /** Sort operator: descending */
+    const OP_DESC = 'DESC';
+
+    private static $VALID_OPERATORS = array(
+        '>', '<', '=', '!='
+    );
+
 
     protected function __construct() {
         //$config = xBoilerplate::getConfig()->db;
@@ -39,14 +68,36 @@ class CW_MySQL
     }
 
     /**
-     * @param string $query
+     * Performs a raw-query upon the database.
+     *
+     * This method gives you full control over your access to the database, however it is unprotected and not
+     * recommended for 80% of applications and queries.
+     *
+     * It is left to the calling code to ensure that the data in the query is safe to execute. In addition, this
+     * method does not return an array of results but the raw mysqli_result object.
+     *
+     * If you are a Centralwayer, prepare to justify your use of this method.
+     *
+     * @param string $query the query to execute
+     * @throws Exception in the event of any SQL exceptions occur
      * @return mysqli_result
      */
     public function query($query) {
-        return self::$_db->query($query);
+        $statement = self::$_db->prepare($query);
+        if($statement === false) {
+            throw self::createQueryException('Error preparing query for execution', self::$_db, $query);
+        }
+
+        if(!$statement->execute()) {
+            throw self::createQueryException('Error executing query', self::$_db, $query);
+        }
+
+        return $statement->get_result();
     }
 
     /**
+     * Obtains the static instance of the CW_MySQL class.
+     *
      * @return CW_MySQL
      */
     public static function getInstance() {
@@ -55,22 +106,28 @@ class CW_MySQL
         }
         return self::$_object;
     }
-    const NO_WHERE = null;
-    const NO_ORDER = null;
-    const NO_LIMIT = null;
-    const NO_OBJECT = 'stdClass';
 
-    private static $VALID_OPERATORS = array(
-        '>', '<', '=', '!='
-    );
-
-    protected function createParameters($where) {
+    /**
+     * Builds the PrivateQueryParameters for the supplied associative array
+     *
+     * This takes a query parameter array and converts it into the set of 3
+     * arrays.
+     *
+     * Incoming data is an associative array with key: column name, value: field value
+     *
+     * This method also determines the target type of the field based on the type of the
+     * value passed in for each field.
+     *
+     * @param array|\associative $parameterArray associative array of parameters
+     * @return PrivateQueryParameters
+     */
+    protected function createParameters(array $parameterArray) {
         $whereClause = new PrivateQueryParameters();
-        if($where == self::NO_WHERE) {
+        if($parameterArray == self::NO_WHERE) {
             return $whereClause; // Early exit if no where clause
         }
 
-        foreach($where as $columnName => $columnValue) {
+        foreach($parameterArray as $columnName => $columnValue) {
             $name = trim($columnName);
             $needsEquals = stripos($name, ' ') === false;
             if($needsEquals) {
@@ -158,7 +215,7 @@ class CW_MySQL
      * @return array of objects found; each object will be of stdClass unless $className is passed
      */
     public function select($columns, $table, $where = self::NO_WHERE, $order = self::NO_ORDER, $limit = self::NO_LIMIT,
-                           $className = self::NO_OBJECT)
+                           $className = self::STANDARD_CLASS)
     {
         $columnFragment = implode(', ', $columns);
         $containsSelectAsterisk = stripos($columnFragment, '*') !== false;
@@ -166,11 +223,19 @@ class CW_MySQL
             throw new Exception('Select * is not allowed');
         }
 
-        $whereClause = $this->createParameters($where);
+        $whereClause = $this->createParameters($where != null ? $where : array());
+        $orderClauses = $this->buildOrderClauses($order != null ? $order : array());
 
         $query = 'SELECT ' . $columnFragment . ' ';
         $query.= 'FROM ' . $table . ' ';
         $query.= $this->generateWhere($whereClause, $query);
+
+        if(sizeof($orderClauses) > 0) {
+            $query.= ' ORDER BY ' . implode(', ', $orderClauses);
+        }
+        if($limit != null) {
+            $query.= ' LIMIT ' . $this->createLimitSql($limit);
+        }
 
         $statement = self::$_db->prepare($query);
         if($statement === false) {
@@ -189,6 +254,88 @@ class CW_MySQL
         }
 
         return $this->executeSelectStatement($statement, $query, $className);
+    }
+
+    /**
+     * Builds the order clauses from the incoming data, if any are present
+     *
+     * @param $order the order to build from
+     * @return array containing the build SQL order clauses
+     * @throws InvalidArgumentException in the event that any of the incoming data is invalid (i.e. ASK instead of ASC)
+     */
+    private function buildOrderClauses($order)
+    {
+        $orderClauses = array();
+
+        if ($order != null) {
+            array_walk($order, function($val, $key) use (&$orderClauses)
+            {
+                $val = strtoupper(trim($val));
+                if ($val != CW_MySQL::OP_ASC && $val != CW_MySQL::OP_DESC) {
+                    throw new InvalidArgumentException('Order must either be ASC or DESC. Order column: ' . $key);
+                }
+                $orderClauses[] = $key . ' ' . $val;
+            });
+            return $orderClauses;
+        }
+        return $orderClauses;
+    }
+
+    /**
+     * Selects one single row based on the clause supplied.
+     *
+     * Essentially a simplification of calling SELECT [columns] FROM [table] WHERE [where] LIMIT 1
+     *
+     * Best used with ID-based to retrieve one column. This method MUST be called with a where clause.
+     *
+     * See select() for more information about each parameter
+     *
+     * @param array $columns the columns to retrieve
+     * @param $table the table to retrieve from
+     * @param array $where the where clause to filter the results by
+     * @param string $className optional; the name of the class to instantiate, if not passed, stdClass is used
+     *
+     * @throws InvalidArgumentException if any of the supplied arguments are incorrect
+     *
+     * @return object if found, the object from the database; otherwise, null
+     */
+    public function selectRow(array $columns, $table, array $where, $className = self::STANDARD_CLASS) {
+        if(sizeof($where) == 0) {
+            throw new InvalidArgumentException('Where clause cannot be an empty array');
+        }
+        else if(trim(strtolower($where[0])) == 'true' || trim($where[0]) == '1') {
+            throw new InvalidArgumentException('Where clause must not be true or 1; specify the row to retrieve.');
+        }
+        $resultArray = $this->select($columns, $table, $where, self::NO_ORDER, 1);
+        if(sizeof($resultArray) > 0) {
+            return $resultArray[0];
+        }
+        else {
+            return null;
+        }
+    }
+
+    /**
+     * Creates the SQL for the parameters to a LIMIT clause
+     *
+     * @param $limit the incoming limit arguments
+     * @return string the string ready to be appended to a LIMIT clause
+     * @throws InvalidArgumentException in the event that the incoming limit arguments are not correct
+     */
+    private function createLimitSql($limit)
+    {
+        $limitValue = '';
+        if (is_numeric($limit)) {
+            $limitValue = $limit;
+            return $limitValue;
+        }
+        else if (is_array($limit) && sizeof($limit) == 2) {
+            $limitValue = $limit[0] . ',' . $limit[1];
+            return $limitValue;
+        }
+        else {
+            throw new InvalidArgumentException('Limit must either be a single numeric, or a 2-element array of integers');
+        }
     }
 
     /**
@@ -235,7 +382,7 @@ class CW_MySQL
      * @return string the single character representation of the type
      * @throws Exception in the event the type of the value is unsupported
      */
-    private function getType($value, $typeHint = null) {
+    protected function getType($value, $typeHint = null) {
         switch(gettype($value)) {
             case 'integer':
                 return 'i';
@@ -415,3 +562,4 @@ class PrivateQueryParameters {
         return sizeof($this->_conditions) == 0;
     }
 }
+

@@ -2,7 +2,6 @@
 
 defined('BASE_PATH') || define('BASE_PATH', realpath(dirname(__FILE__)));
 
-// adds elasticsearch to the include path
 set_include_path(
     get_include_path() . PATH_SEPARATOR .
         BASE_PATH . '/../lib' . PATH_SEPARATOR .

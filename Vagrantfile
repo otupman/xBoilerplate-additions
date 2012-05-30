@@ -1,4 +1,4 @@
-# Elastica debian image
+# xBoilerplate-additions debian image
 #
 # All passwords and username (db, ...) are root / root
 #

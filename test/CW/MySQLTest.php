@@ -19,6 +19,8 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
     private $barney;
     private $alice;
 
+    private $_db;
+
     public function setup() {
        // error_reporting(E_ALL);
         $this->config = array();
@@ -90,6 +92,8 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
         $this->fred = $fred;
         $this->barney = $barney;
         $this->alice = $alice;
+
+        $this->_db = $db;
     }
 
     /**
@@ -116,17 +120,20 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
         $this->markTestIncomplete('This test is not yet implemented');
     }
 
-    public function testWithSelectLimit() {
-        $this->markTestIncomplete('This test is not yet implemented');
+    public function testSelect_withLimit() {
+//        $this->markTestIncomplete('This test is not yet implemented');
         // SELECT firstname FROM people LIMIT 1
         $onlyOneRow = CW_MySQL::getInstance()->select(array('firstname'), 'people', null, null, 1);
 
         $this->assertEquals(1, sizeof($onlyOneRow));
-        //TODO: Add test here for the value of the first row (should be Fred)
+
+        $this->assertEquals($this->fred['firstname'], $onlyOneRow[0]->firstname, 'Only row returned should be fred');
 
         // SELECT firstname FROM people LIMIT 1,3
-        $secondRowOnly = CW_MySQL::getInstance()->select(array('firstname'), 'people', null, null, array(1,3));
-        //TODO: Add test here for the values of the 2nd & 3rd row (Barney & Alice)
+        $lastTwoRows = CW_MySQL::getInstance()->select(array('firstname'), 'people', null, null, array(1,3));
+
+        $this->assertEquals(2, sizeof($lastTwoRows));
+        $this->assertEquals($this->barney['firstname'], $lastTwoRows[0]->firstname, 'First row (2nd in DB) should be Barney');
     }
 
     /**
@@ -160,7 +167,7 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
     /*
      *
      */
-    public function testSelectWithColumns() {
+    public function testSelect_withColumns() {
 
         // SELECT id, firstname FROM people
         $people = CW_MySQL::getInstance()->select(array('id', 'firstname'), 'people');
@@ -176,13 +183,27 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
         $this->assertObjectNotHasAttribute('firstname', $people[0], 'Firstname should not be present, just: id, lastname');
     }
 
-    public function testSelectRow() {
+    public function testSelectRow_successfulCase() {
         $this->markTestIncomplete('This test is not yet implemented');
         //TODO Test the method selectRow() that will return only one row (object)
 
     }
 
-    public function testSelectWithWhere() {
+    public function testSelect_withObject() {
+        $people = CW_MySQL::getInstance()->select(
+            array('firstname', 'lastname', 'age'), 'people', CW_MySQL::NO_WHERE, CW_MySQL::NO_LIMIT, CW_MySQL::NO_ORDER, 'Person'
+        );
+
+        $this->assertEquals(3, sizeof($people));
+
+        $fred = $people[0];
+
+        $this->assertInstanceOf('Person', $fred);
+        $this->assertEquals($this->fred['firstname'], $fred->firstname);
+        $this->assertEquals($this->fred['lastname'], $fred->getLastname()); // Lastname is a private property with a getter!
+    }
+
+    public function testSelect_withWhere() {
         // SELECT firstname FROM people WHERE firstname = 'Bob' /* 0 results - no user with name Bob */
         $noPeople = CW_MySQL::getInstance()->select(array('firstname'), 'people', array('firstname' => 'Bob'));
 
@@ -210,10 +231,44 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
 
     }
 
+    public function testSelect_everyColumn() {
+        $allColumns = array('firstname', 'lastname', 'age', 'createdDate');
+        $people = CW_MySQL::getInstance()->select($allColumns, 'people', array('firstname' => 'Barney'));
+        $this->assertEquals(1, sizeof($people), 'Firstname where of Barney failed');
+
+        $barney = $people[0];
+        $this->assertEquals($this->barney['firstname'], $barney->firstname, 'Firstname search for Barney failed');
+
+        $people = CW_MySQL::getInstance()->select($allColumns, 'people', array('lastname' => 'Jones'));
+        $this->assertEquals(1, sizeof($people), 'Lastname where of Jones failed');
+
+        $alice = $people[0];
+        $this->assertEquals($this->alice['lastname'], $alice->lastname, 'Lastname search of Alice failed');
+
+        $people = CW_MySQL::getInstance()->select($allColumns, 'people', array('age' => 11));
+        $this->assertEquals(1, sizeof($people), 'Age search of 11 (Fred) failed');
+
+        $fred = $people[0];
+        $this->assertEquals($this->fred['age'], $fred->age, 'Age search of 11 (for Fred) failed');
+
+        $people = CW_MySQL::getInstance()->select($allColumns, 'people', array('createdDate' => new Datetime('2012-12-12 12:12:12')));
+        $this->assertEquals(1, sizeof($people), 'Date search (for Barney) failed');
+
+        $barneyAgain = $people[0];
+        $this->assertEquals($this->barney['createdDate'], $barneyAgain->createdDate, 'createddate search (for Barney) failed');
+
+        $people = CW_MySQL::getInstance()->select($allColumns, 'people', array('balance' => $this->fred['balance']));
+        $this->assertEquals(1, sizeof($people), 'Balance search of 1.11 (for Fred) failed');
+
+        $fredAgain = $people[0];
+        $this->assertEquals($this->fred['balance'], $fredAgain->balance, 'Balance search of 1.11 failed (for Fred)');
+
+    }
+
     /**
      * Tests the where clause processing to ensure that bad operators are picked up
      */
-    public function testBadWhere() {
+    public function testSelect_withBadWhere() {
         try {
             CW_MySQL::getInstance()->select(array('firstname'), 'people', array('firstname X' => 'Bob'));
             $this->fail('Expected exception due to an invalid operator "X"');
@@ -228,29 +283,29 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
     /**
      * Tests retrieving data when the data type of the data does not match the DB data type.
      *
+     *t
      * Example: DateTime() to on a DATETIME column as opposed to a TIMESTAMP. TIMESTAMP needs a different
      * format.
      */
-    public function testSelectWithTypes() {
+    public function testSelect_withTypes() {
         $this->markTestIncomplete('This test is not yet implemented');
     }
 
-    public function testSelectWithSort() {
-        $this->markTestIncomplete('This test is not yet implemented');
+    public function testSelect_withSort() {
         // SELECT firstname FROM people ORDER BY age DESC
         $aliceFirst = CW_MySQL::getInstance()->select(array('firstname'), 'people', null, array('age' => 'DESC'));
 
         $alice = $aliceFirst[0];
         $this->assertEquals($this->alice['firstname'], $alice->firstname);
         $barney = $aliceFirst [1];
-        $this->assertEquals('Barney', $barney['firstname']);
+        $this->assertEquals('Barney', $barney->firstname);
     }
 
-    public function testSelectWithDates() {
+    public function testSelect_withDates() {
         $this->markTestIncomplete('Test not yet complete');
     }
 
-    public function testInsert() {
+    public function testInsert_simple() {
         $this->markTestIncomplete('This test is not yet implemented');
         $firstname = 'testInsert_' . time();
 
@@ -258,13 +313,13 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
         CW_MySQL::getInstance()->insert('people',
             array('firstname' => $firstname, 'lastname' => 'Test user', 'age' => 99, 'createdDate' => time()));
 
-        $testUserOnly = CW_MySQL::getInstance()->select(array('firstname'), 'people', array('firstname' => $firstname));
-        $this->assertEquals(1, sizeof($testUserOnly), '1 result should be returned: just the recently-inserted test user');
+        $result = $this->_db->query('SELECT firstname FROM people WHERE firstname = "' . $firstname . '"');
+        $this->assertEquals(1, $result->num_rows, '1 result should be returned: just the recently-inserted test user');
 
-        $testUser = $testUserOnly[0];
+        $testUser = $result->fetch_object();
 
-        $this->assertEquals($firstname, $testUserOnly['firstname'], 'First name does not match');
-        $this->assertEquals(99, $testUserOnly['age'], 'Age does not match');
+        $this->assertEquals($firstname, $testUser->firstname, 'First name does not match');
+        $this->assertEquals(99, $testUser->age, 'Age does not match');
     }
 
 
@@ -274,6 +329,7 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
     }
 
     public function testUpdateNormal() {
+        $this->markTestIncomplete('Test not implemented yet');
         // UPDATE people SET firstname = 'Fred' WHERE firstname = 'fred'
         $fredsNewName = 'Fred';
         $numRowsChanged = CW_MySQL::getInstance()->update(
@@ -282,16 +338,17 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
 
         $this->assertEquals(1, $numRowsChanged, '1 row should have been modified ("fred")');
 
-        $updatedRows = CW_MySQL::getInstance()->select(
-            array('firstname'), 'people', array('age'=>11)
-        );
-        $this->assertEquals(1, sizeof($updatedRows));
+        $result = $this->_db->query('SELECT firstname FROM people WHERE age = 11');
 
-        $fred = $updatedRows[0];
+        $this->assertEquals(1, $result->num_rows);
+
+        $fred = $result->fetch_object();
 
         $this->assertEquals($fredsNewName, $fred->firstname);
 
     }
+
+
 
     public function testUpdate_badParameters() {
         $this->markTestIncomplete('This test is not yet implemented');
@@ -311,8 +368,7 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
     }
 
     public function testLastInsertId() {
-        $this->fail('Test not implemented yet');
-
+        $this->markTestIncomplete('Not yet implemented');
         CW_MySQL::getInstance()->insert('people',
             array('firstname' => 'testLastInsertId', 'lastname' => 'User', 'age' => 50, 'createdDate' => time()));
         $lastInsertId = CW_MySQL::getInstance()->getLastInsertId();
@@ -321,5 +377,21 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
         $singleRow = $lastInsertOnly[0];
 
         $this->assertEquals($singleRow['id'], $lastInsertId, 'Insert ID from class does not match actual from database.');
+    }
+}
+/**
+ * This class is here to test retrieving data with a custom class rather than stdClass.
+ * See testSelect_withObject
+ */
+class Person {
+    // Public properties just for speed and simplicity of testing.
+    public $firstname;
+    public $age;
+
+    // Private property to test & demonstrate that mysqli will set private properties
+    private $lastname;
+
+    public function getLastname() {
+        return $this->lastname;
     }
 }

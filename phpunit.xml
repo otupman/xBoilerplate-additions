@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <docblox>
-    <title>Elastica</title>
+    <title>xBoilerplate-additions</title>
     <parser>
         <target>./build/api</target>
     </parser>
