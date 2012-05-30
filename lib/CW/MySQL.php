@@ -125,6 +125,11 @@ class CW_MySQL extends ArrayObject
     }
 
 
+    /**
+     * @param $table
+     * @param array $data
+     * @throws Exception
+     */
     public function insert($table, array $data) {
         //create prepare statement, etc. INSERT INTO `people` (`firstname`, `lastname`, `age`, `createdDate`) VALUES (?, ?, ?, ?)
         $keys = array_keys($data);
@@ -161,13 +166,16 @@ class CW_MySQL extends ArrayObject
             foreach($data as $key=>$value) {
                 $q[] = &$value;
             }
+            //TODO add exception
             call_user_func_array(array($stmt, 'bind_param'), array_merge(array(&$type), $q));
 
             $result = $stmt->execute();
             if (true === $result) {
+                //TODO return autoincrement ID
                 print 'EXICUTE TRUE!!!!!!!!!!!!!!'; //just for test
             }
             else
+
                 throw new Exception('Error: ' .$stmt->error);
 
             $stmt->close();
