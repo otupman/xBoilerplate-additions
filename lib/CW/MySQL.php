@@ -1,7 +1,30 @@
 <?php
 /**
- * Initial blank version, ready for update.
+ * CW_MySQL - Simplified database access class to provide quick, easy and secure queries.
+ *
+ * The MySQL class is intended to provide clients with a simplified set of SQL queries that should cover 80% of use
+ * cases. It also provides more power via the query() method, where a custom query can be supplied - however, it is
+ * expected that this method is only used as a last resort. For Centralwayers, using it will mean you're asked to
+ * justify *why* you are using it!
+ *
+ * The standard SQL operations are available:
+ *  select()
+ *  update()
+ *  insert()
+ *
+ * The following additional operations are available:
+ *  selectRow() - selects a single row, returning the first result
+ *
+ * The following operations are *not* available:
+ *  delete() - hard-deleting is not recommended, consider using a soft delete (i.e. a boolean column called isDeleted)
+ *
+ * More information can be found on github's wiki
+ *
+ * @author Oliver Tupman <oliver.tupman@centralway.com>
+ * @version 0.1
+ *
  */
+
 class CW_MySQL extends ArrayObject
 {
     protected static $_object = null;
@@ -73,7 +96,7 @@ class CW_MySQL extends ArrayObject
 
             $sql = $atrib.$table.$wheres;
 
-            print $sql;
+            //print $sql;
 
         }
 
@@ -157,8 +180,48 @@ class CW_MySQL extends ArrayObject
 
     }
 
-    public function update($table, array $data, $where) {
+    public function update($table, array $data, array $where) {
+            $columnNames = array_keys($data);
+            $variablesSet = '';
+            foreach($columnNames as $item) {
+                $variablesSet .= $item .'=?, ';
+            }
+            $variablesSet = substr($variablesSet, 0, -2);
 
+            $whereNames = array_keys($where);
+            $variableWhere = '';
+            foreach($whereNames as $item) {
+                $variableWhere .=$item .'=? ';
+            }
+            $variableWhere = substr($variableWhere, 0, -1);
+
+            $update = 'UPDATE '.$table;
+            $set = ' SET ' .$variablesSet;
+            $whereP = ' WHERE ' .$variableWhere;
+            $sql = $update.$set.$whereP;
+
+            if($stmt = self::$_db->prepare($sql)) {
+                $dataType = $this->_checkTypeOfValues($data);
+                $type = '';
+                //getting first letter from each of value type
+                foreach($dataType as $word) {
+                    $letter = substr($word, 0, 1);
+                    $type .= $letter;
+                }
+
+                //bind param
+                $q = array();
+                foreach($data as $key=>$value) {
+                    $q[] = &$value;
+                }
+                print(print_r(array_merge(array(&$type), $q)));
+                //call_user_func_array(array($stmt, 'bind_param'), array_merge(array(&$type), $q));
+
+                $stmt->execute();
+            }
+            else {
+                throw new Exception('Error preparing: ' . self::$_db->error);
+            }
     }
 
     public function getLastInsertId() {
