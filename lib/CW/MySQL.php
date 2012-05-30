@@ -318,6 +318,9 @@ class CW_MySQL
 
         return $dataType;
     }
+
+
+    
     public function insert($table, array $data) {
         //create prepare statement, etc. INSERT INTO `people` (`firstname`, `lastname`, `age`, `createdDate`) VALUES (?, ?, ?, ?)
         $keys = array_keys($data);
@@ -350,43 +353,23 @@ class CW_MySQL
         //prepare statement
         if($sqlPrepare = $stmt->prepare($sql)) {
             $whereClause = $this->createParameters($data);
-            //bind param
-//            $q = array();
-//            foreach($whereClause->getValues() as $value) {
-//                $q[] = &$value;
-//            }
-//            print(print_r($q));
-//            //TODO add exception
-//            call_user_func_array(array($stmt, 'bind_param'), array_merge(array(&$type), $q));
-
-
 
             $values = array();
-            print 'Here!';
             $v = $whereClause->getValues();
-            print_r($v);
-            print 'Here!';
             foreach($v as &$value) {
                 array_push($values, &$value);
-               //&&[] = &$value;
             }
-
-            print_r($values);
             $typeList = $whereClause->getTypeList();
             $functionParams = array_merge(array(&$typeList), $values);
-
             call_user_func_array(array($stmt, 'bind_param'), $functionParams);
-
-
 
             $result = $stmt->execute();
             if (true === $result) {
                    return ($stmt->insert_id);
             }
-            else
-
+            else {
                 throw new Exception('Error: ' .$stmt->error);
-
+            }
             $stmt->close();
         }
         else
@@ -394,7 +377,7 @@ class CW_MySQL
     }
 
     public function delete($table, $where) {
-
+        throw new  Exception("database successfully deleted");
     }
 
     public function update($table, array $data, array $where) {
