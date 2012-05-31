@@ -22,7 +22,7 @@
  *  https://github.com/centralway/xBoilerplate-additions/wiki/MySQL
  *
  * @author Oliver Tupman <oliver.tupman@centralway.com>
- * @version 0.1
+ * @version 0.2
  *
  */
 
@@ -64,6 +64,10 @@ class CW_MySQL
     const NO_LIMIT = null;
     /** The default class instantiated to return results with */
     const STANDARD_CLASS = 'stdClass';
+
+    /** The escape character to surround field names with */
+    const STRING_ESCAPE = '`';
+
 
     /** Sort operator: ascending */
     const OP_ASC = 'ASC';
@@ -178,18 +182,39 @@ class CW_MySQL
         }
 
         foreach($parameterArray as $columnName => $columnValue) {
-            $name = trim($columnName);
-            $needsEquals = stripos($name, ' ') === false;
-            if($needsEquals) {
-                $name .= ' =';
-            }
-            $name .= ' ? ';
+            $name = $this->buildCondition($columnName);
             $targetType = $this->getType($columnValue);
             $value = $this->convertValue($columnValue, $targetType);
             $whereClause->addClause($name, $targetType, $value);
         }
 
         return $whereClause;
+    }
+
+    /**
+     * Takes a raw condition passed in from the client and converts it to a valid conditional to go into the SQL
+     * clause.
+     *
+     * Examples:
+     * array('firstname' => 'someValue') - turns into `firstname` = ?
+     * array('firstname >' => 'otherValue') - `firstname` > ?
+     *
+     * @param $rawCondition string the raw condition passed in by the client
+     * @returns string the fully-built condition ready for SQL
+     */
+    protected function buildCondition($rawCondition) {
+        $rawCondition = trim($rawCondition);
+        $operator = '=';
+        $columnName = $rawCondition;
+        if(stripos($rawCondition, ' ') !== false) {
+            $splitCondition = mb_split(' ', $rawCondition);
+            $columnName = $splitCondition[0];
+            $operator = $splitCondition[1];
+        }
+        else {
+            // Will use defaults for $columnName and $operator
+        }
+        return self::escapeFieldName($columnName) . ' ' . $operator . ' ?';
     }
 
     //TODO: This needs to handle type hinting
@@ -267,7 +292,8 @@ class CW_MySQL
     public function select($columns, $table, $where = self::NO_WHERE, $order = self::NO_ORDER, $limit = self::NO_LIMIT,
                            $className = self::STANDARD_CLASS)
     {
-        $columnFragment = implode(', ', $columns);
+        //$columnFragment = implode(', ', $columns);
+        $columnFragment = $this->sqlImplode($columns);
         $containsSelectAsterisk = stripos($columnFragment, '*') !== false;
         if($containsSelectAsterisk) {
             throw new Exception('Select * is not allowed');
@@ -307,6 +333,21 @@ class CW_MySQL
         return $this->executeSelectStatement($statement, $query, $className);
     }
 
+    public static function escapeFieldName($fieldName) {
+        return self::STRING_ESCAPE . $fieldName . self::STRING_ESCAPE;
+    }
+
+    private function sqlImplode(array $items, $glue = ', ') {
+        $implodedData = '';
+        foreach($items as $item) {
+            if(strlen($implodedData) > 0) {
+                $implodedData.= $glue;
+            }
+            $implodedData .= self::escapeFieldName($item);
+        }
+        return $implodedData;
+    }
+
     /**
      * Builds the order clauses from the incoming data, if any are present
      *
@@ -325,7 +366,7 @@ class CW_MySQL
                 if ($val != CW_MySQL::OP_ASC && $val != CW_MySQL::OP_DESC) {
                     throw new InvalidArgumentException('Order must either be ASC or DESC. Order column: ' . $key);
                 }
-                $orderClauses[] = $key . ' ' . $val;
+                $orderClauses[] = CW_MySQL::escapeFieldName($key) . ' ' . $val;
             });
             return $orderClauses;
         }

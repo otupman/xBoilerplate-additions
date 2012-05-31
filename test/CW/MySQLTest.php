@@ -84,7 +84,8 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
            lastname VARCHAR(255) NOT NULL,
            age INT,
            createdDate DATETIME NOT NULL,
-           balance FLOAT NOT NULL
+           balance FLOAT NOT NULL,
+           `from` DATETIME
           );';
         $db->query($createQuery);
 
@@ -204,6 +205,33 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
         $this->assertInstanceOf('Person', $fred);
         $this->assertEquals($this->fred['firstname'], $fred->firstname);
         $this->assertEquals($this->fred['lastname'], $fred->getLastname()); // Lastname is a private property with a getter!
+    }
+
+    /**
+     * Tests to ensure that reserved words do not cause any issues.
+     *
+     * Each call should succeed, therefore no assertions are required.
+     */
+    public function testSelect_reservedWords() {
+        // Test using a reserved word in the column list
+        try {
+            CW_MySQL::getInstance()->select(array('from'), 'people');
+        } catch(Exception $ex) { $this->fail('Reserved word in field list caused exception: ' . $ex->getMessage());  }
+
+        // Test using a reserved word in the WHERE clause
+        try {
+            CW_MySQL::getInstance()->select(array('firstname', 'lastname'), 'people', array('from' => new DateTime(time())));
+        } catch(Exception $ex) { $this->fail('Reserved word in where clause caused exception: ' . $ex->getMessage());  }
+
+        // Test using a reserved word in the SORT BY clause
+        try {
+            CW_MySQL::getInstance()->select(
+                    array('firstname', 'lastname'),
+                    'people',
+                    array('firstname' => 'Fred'),
+                    array('from' => 'ASC')
+                );
+        } catch(Exception $ex) { $this->fail('Reserved word in sort clause caused exception: ' . $ex->getMessage());  }
     }
 
     public function testSelect_withWhere() {
