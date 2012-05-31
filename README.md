@@ -7,6 +7,7 @@ within the lib/CW directory and drop them into lib/CW in your xBoilerplate appli
 Components include:
  - MySQL: a simplified way of accessing a MySQL database
  - Mail: a simpleified way of sending mail, with a few extra components thrown in
+   More info: More info: https://github.com/centralway/xBoilerplate-additions/wiki/MySQL
 
 Getting Started - using the additions
 ----------------------------
