@@ -49,14 +49,15 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
      * @param $balance
      * @throws Exception
      */
-    private function rawRowInsert(mysqli $db, $firstname, $lastname, $age, $createdDate, $balance) {
+    private function rawRowInsert(mysqli $db, $firstname, $lastname, $age, DateTime $createdDate, $balance) {
+        $formattedDate = $createdDate->format('Y-m-d H:i:s');
         if(!$statement = $db->stmt_init()) {
             throw new Exception('Error creating prepared statement: ' . $db->error);
         }
         if(!$statement->prepare('INSERT INTO people (firstname, lastname, age, createdDate, balance) VALUES (?, ?, ?, ?, ?)')) {
             throw new Exception('Error preparing insert query: ' . $statement->error);
         }
-        if(!$statement->bind_param('ssisd', $firstname, $lastname, $age, $createdDate, $balance)) {
+        if(!$statement->bind_param('ssisd', $firstname, $lastname, $age, $formattedDate, $balance)) {
             throw new Exception('Error binding parameters: ' . $statement->error);
         }
         if(!$statement->execute()) {
@@ -70,9 +71,9 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
      * DROPs the database if it exists, (re-)creates it and then inserts 3 rows of test data
      */
     private function initialiseDatabase() {
-        $fred = array('firstname' => 'fred', 'lastname' => 'flintstone', 'age' => 11, 'createdDate' => '2001-01-01 11:11:11', 'balance' => 1.11);
-        $barney = array('firstname' => 'Barney', 'lastname' => 'Rubble', 'age' => 12, 'createdDate' => '2012-12-12 12:12:12', 'balance' => 12.12);
-        $alice = array('firstname' => 'Alice', 'lastname' => 'Jones', 'age' => 21, 'createdDate' => '1990-04-21 21:21:21', 'balance' => 0.21);
+        $fred = array('firstname' => 'fred', 'lastname' => 'flintstone', 'age' => 11, 'createdDate' => new DateTime('2001-01-01 11:11:11'), 'balance' => 1.11);
+        $barney = array('firstname' => 'Barney', 'lastname' => 'Rubble', 'age' => 12, 'createdDate' => new DateTime('2012-12-12 12:12:12'), 'balance' => 12.12);
+        $alice = array('firstname' => 'Alice', 'lastname' => 'Jones', 'age' => 21, 'createdDate' => new DateTime('1990-04-21 21:21:21'), 'balance' => 0.21);
 
         $db = new mysqli(self::DB_HOST, self::DB_USER, self::DB_PASS, self::DB_SCHEMA);
 
@@ -286,6 +287,7 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
         $this->assertEquals(1, sizeof($people), 'Date search (for Barney) failed');
 
         $barneyAgain = $people[0];
+        $this->assertInstanceOf('DateTime', $barneyAgain->createdDate, 'createddate is NOT an instance of DateTime');
         $this->assertEquals($this->barney['createdDate'], $barneyAgain->createdDate, 'createddate search (for Barney) failed');
 
         $people = CW_MySQL::getInstance()->select($allColumns, 'people', array('balance' => $this->fred['balance']));
@@ -338,20 +340,33 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
 
     public function testInsert_simple() {
         $firstname = 'testInsert_' . time();
+        $lastname = 'Test user';
+        $age = 99;
+        $createdDate = new DateTime();
 
         // INSERT INTO people (firstname, lastname, age, createdDate, )
         CW_MySQL::getInstance()->insert('people',
-            array('firstname' => $firstname, 'lastname' => 'Test user', 'age' => 99, 'createdDate' => time()));
+            array('firstname' => $firstname, 'lastname' => $lastname, 'age' => $age, 'createdDate' => $createdDate));
 
 
-        $result = $this->_db->query('SELECT firstname, age FROM people WHERE firstname = "' . $firstname . '"');
+        $result = $this->_db->query('SELECT firstname, lastname, age, createdDate, age FROM people WHERE firstname = "' . $firstname . '"');
         $this->assertEquals(1, $result->num_rows, '1 result should be returned: just the recently-inserted test user');
 
         $testUser = $result->fetch_object();
 
         $this->assertEquals($firstname, $testUser->firstname, 'First name does not match');
-        $this->assertEquals(99, $testUser->age, 'Age does not match');
+        $this->assertEquals($age, $testUser->age, 'Age does not match');
+        $this->assertEquals($lastname, $testUser->lastname, 'Lastname does not match');
+        $this->assertEquals($createdDate, new DateTime($testUser->createdDate), 'Created Date does not match');
+
+        $testUser = CW_MySQL::getInstance()->selectRow(array('firstname', 'lastname', 'age', 'createdDate'), 'people', array('age' => $age));
+
+        $this->assertEquals($firstname, $testUser->firstname, 'From selectRow(): First name does not match');
+        $this->assertEquals($age, $testUser->age, 'From selectRow(): Age does not match');
+        $this->assertEquals($lastname, $testUser->lastname, 'From selectRow(): Lastname does not match');
+        $this->assertEquals($createdDate, $testUser->createdDate, 'From selectRow(): Created date does not match');
     }
+
 
 
 

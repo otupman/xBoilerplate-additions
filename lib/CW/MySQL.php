@@ -395,9 +395,7 @@ class CW_MySQL
         if(sizeof($where) == 0) {
             throw new InvalidArgumentException('Where clause cannot be an empty array');
         }
-        else if(trim(strtolower($where[0])) == 'true' || trim($where[0]) == '1') {
-            throw new InvalidArgumentException('Where clause must not be true or 1; specify the row to retrieve.');
-        }
+
         $resultArray = $this->select($columns, $table, $where, self::NO_ORDER, 1);
         if(sizeof($resultArray) > 0) {
             return $resultArray[0];
@@ -508,14 +506,63 @@ class CW_MySQL
         if ($result === false) {
             throw self::createQueryException('Error getting results', $statement, $query);
         }
-        $results = array();
-        while(($row = $result->fetch_object($className)) != null) {
-            $results[] = $row;
-        }
+        $results = $this->_buildResults($result, $className);
         $statement->close();
 
         return $results;
     }
+
+    private function isDateField($fieldTypeCode) {
+        $mysqlFieldTypeMap = array(
+            1=>'tinyint',
+            2=>'smallint',
+            3=>'int',
+            4=>'float',
+            5=>'double',
+            7=>'timestamp',
+            8=>'bigint',
+            9=>'mediumint',
+            10=>'date',
+            11=>'time',
+            12=>'datetime',
+            13=>'year',
+            16=>'bit',
+            //252 is currently mapped to all text and blob types (MySQL 5.0.51a)
+            253=>'varchar',
+            254=>'char',
+            246=>'decimal'
+        );
+        return $mysqlFieldTypeMap[$fieldTypeCode] == 'datetime';
+    }
+
+    private function _buildResults(mysqli_result $result, $className)
+    {
+        $dateFieldNames = array();
+        for($i = 0; $i < $result->field_count; $i++) {
+            $fieldMetadata = $result->fetch_field_direct($i);
+            if($fieldMetadata !== false) {
+                if($this->isDateField($fieldMetadata->type)) {
+                    $dateFieldNames[] = $fieldMetadata->name;
+                }
+            }
+        }
+
+        $results = array();
+        while (($row = $result->fetch_object($className)) != null) {
+//            $row = (array)$row;
+            foreach($dateFieldNames as $fieldName) {
+                try {
+                    $row->$fieldName = new DateTime($row->$fieldName);
+                } catch(Exception $ex) {
+                    throw new Exception('Error parsing DateTime - ' . $ex->getMessage() . ' - and the value was: [' . $row->$fieldName . '] on column [' . $fieldName . ']');
+                }
+            }
+
+            $results[] = $row;
+        }
+        return $results;
+    }
+
 
     /**
      * Simple function that creates an instance of an exception with a message and adds the relevant mysqli error to it
