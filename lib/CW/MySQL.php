@@ -42,6 +42,20 @@ class CW_MySQL
      */
     protected static $_db = null;
 
+
+    /**
+     * Obtains the static instance of the CW_MySQL class.
+     *
+     * @return CW_MySQL
+     */
+    public static function getInstance() {
+        if (!self::$_object) {
+            self::$_object = new self();
+        }
+        return self::$_object;
+    }
+
+
     /** Optionally used to signal an empty where clause */
     const NO_WHERE = null;
     /** Optionally used to signal an empty order instruction  */
@@ -60,11 +74,58 @@ class CW_MySQL
         '>', '<', '=', '!='
     );
 
-
     protected function __construct() {
-        //$config = xBoilerplate::getConfig()->db;
-        //self::$_db = new mysqli($config['host'], $config['username'], $config['password'], $config['db']);
-        self::$_db = new mysqli('localhost', 'root', '', 'xBoilerplate_additions');
+        $config = $this->loadConfig(xBoilerplate::getInstance());
+        $this->openConnection($config);
+    }
+
+    /**
+     * Opens the connection the MySQL server using the supplied configuration
+     *
+     * @param $config the database configuration
+     * @throws Exception in the event that there is an issue connecting to the database
+     */
+    protected function openConnection($config)
+    {
+        self::$_db = new mysqli($config->host, $config->username, $config->password, $config->schema);
+        if (self::$_db === false) {
+            throw new Exception('Error connecting to database: ' . mysqli_error(self::$_db));
+        }
+    }
+
+    /**
+     * Loads the configuration from xBoilerplate
+     *
+     * @param $xBoilerplate the xBoilerplate instance
+     * @return configuration entry for database details
+     * @throws RuntimeException in the event that there is no 'db' property on the xBoilerplate configuration
+     */
+    protected function loadConfig($xBoilerplate)
+    {
+        $xConfig = $xBoilerplate->getConfig();
+
+        if (!array_key_exists('db', $xConfig)) {
+            throw new RuntimeException('Missing "db" property on configuration, have you setup it up correctly?');
+        }
+
+        $config = (object)$xConfig->db;
+        $this->checkConfig($config);
+        return $config;
+    }
+
+    /**
+     * Checks the supplied configuration for any missing config settings and throws an exception if any are found
+     *
+     * @param $dbConfig db configuration array
+     * @throws RuntimeException if any required config key is not found
+     */
+    private function checkConfig($dbConfig) {
+        $requiredKeys = array('username', 'password', 'host', 'schema');
+        foreach($requiredKeys as $configKey) {
+            if(!array_key_exists($configKey, $dbConfig)) {
+                throw new RuntimeException('Required configuration key ' . $configKey . ' is not present on your db configuration');
+            }
+        }
     }
 
     /**
@@ -95,17 +156,6 @@ class CW_MySQL
         return $statement->get_result();
     }
 
-    /**
-     * Obtains the static instance of the CW_MySQL class.
-     *
-     * @return CW_MySQL
-     */
-    public static function getInstance() {
-        if (!self::$_object) {
-            self::$_object = new self();
-        }
-        return self::$_object;
-    }
 
     /**
      * Builds the PrivateQueryParameters for the supplied associative array
@@ -545,6 +595,8 @@ class CW_MySQL
         $sql = $update.$set.$whereP;
 
         if($stmt = self::$_db->prepare($sql)) {
+            $whereClause = $this->createParameters($where);
+            $values = array();
             $dataType = $this->_checkTypeOfValues($data);
             $type = '';
             //getting first letter from each of value type
