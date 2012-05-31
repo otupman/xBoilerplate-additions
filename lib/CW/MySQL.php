@@ -418,18 +418,14 @@ class CW_MySQL
             }
 
             $functionParams = array_merge(array(&$type), $values);
-            print_r($functionParams);
             if(call_user_func_array(array($stmt, 'bind_param'), $functionParams)){
                 if($stmt->execute()) {
-                    print 'EXECUTE TRUE'; //testing
-                    return ($stmt->insert_id);
+                    return ($stmt->affected_rows);
                 }
             }
             else {
                 throw new Exception('Error: ' .$stmt->error);
             }
-
-
         }
         else {
             throw new Exception('Error preparing: ' . self::$_db->error);
