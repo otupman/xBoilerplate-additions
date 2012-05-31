@@ -86,7 +86,7 @@ class CW_MySQL
     /**
      * Opens the connection the MySQL server using the supplied configuration
      *
-     * @param $config the database configuration
+     * @param object $config the database configuration
      * @throws Exception in the event that there is an issue connecting to the database
      */
     protected function openConnection($config)
@@ -100,11 +100,11 @@ class CW_MySQL
     /**
      * Loads the configuration from xBoilerplate
      *
-     * @param $xBoilerplate the xBoilerplate instance
+     * @param xBoilerplate $xBoilerplate the xBoilerplate instance
      * @return configuration entry for database details
      * @throws RuntimeException in the event that there is no 'db' property on the xBoilerplate configuration
      */
-    protected function loadConfig($xBoilerplate)
+    protected function loadConfig(xBoilerplate $xBoilerplate)
     {
         $xConfig = $xBoilerplate->getConfig();
 
@@ -199,7 +199,7 @@ class CW_MySQL
      * array('firstname' => 'someValue') - turns into `firstname` = ?
      * array('firstname >' => 'otherValue') - `firstname` > ?
      *
-     * @param $rawCondition string the raw condition passed in by the client
+     * @param string $rawCondition string the raw condition passed in by the client
      * @returns string the fully-built condition ready for SQL
      */
     protected function buildCondition($rawCondition) {
@@ -280,8 +280,8 @@ class CW_MySQL
      * $people = select(array('firstname', 'lastname'), 'people', null, null, null, 'person');
      *
      *
-     * @param $columns the columns to retrieve data from
-     * @param $table the table to retrieve the data from
+     * @param array|associative $columns the columns to retrieve data from
+     * @param string $table the table to retrieve the data from
      * @param array $where optional; where clause with which to filter data, key: column name, value: value
      * @param array $order optional; associative array of fields to order by and in which direction
      * @param array $limit optional; pass in a integer to limit TO, pass in an 2-element array to limit FROM and TO
@@ -289,7 +289,7 @@ class CW_MySQL
      * @throws Exception in the event of an issue TODO: issue-specific exceptions
      * @return array of objects found; each object will be of stdClass unless $className is passed
      */
-    public function select($columns, $table, $where = self::NO_WHERE, $order = self::NO_ORDER, $limit = self::NO_LIMIT,
+    public function select(array $columns, $table, $where = self::NO_WHERE, $order = self::NO_ORDER, $limit = self::NO_LIMIT,
                            $className = self::STANDARD_CLASS)
     {
         //$columnFragment = implode(', ', $columns);
@@ -333,10 +333,24 @@ class CW_MySQL
         return $this->executeSelectStatement($statement, $query, $className);
     }
 
+    /**
+     * Escapes a field name with the appropriate escape characters in order to prevent keyword issues
+     *
+     * @static
+     * @param string $fieldName the field name to escape
+     * @return string the properly escaped fieldname
+     */
     public static function escapeFieldName($fieldName) {
         return self::STRING_ESCAPE . $fieldName . self::STRING_ESCAPE;
     }
 
+    /**
+     * Implodes a series of column names in an SQL-compatible fashion, preventing any issues with reserved words
+     *
+     * @param array $items an array of column names
+     * @param string $glue optional; glue to stick the elements together
+     * @return string the imploded array
+     */
     private function sqlImplode(array $items, $glue = ', ') {
         $implodedData = '';
         foreach($items as $item) {
@@ -512,29 +526,46 @@ class CW_MySQL
         return $results;
     }
 
+    const TYPECODE_DATETIME = 12;
+
+    /**
+     * Determines if the type code supplied is for a datetime or not
+     *
+     * @param $fieldTypeCode the code from a fetch_field_direct call
+     * @return bool true if the code is for a DATETIME; otherwise false
+     */
     private function isDateField($fieldTypeCode) {
-        $mysqlFieldTypeMap = array(
-            1=>'tinyint',
-            2=>'smallint',
-            3=>'int',
-            4=>'float',
-            5=>'double',
-            7=>'timestamp',
-            8=>'bigint',
-            9=>'mediumint',
-            10=>'date',
-            11=>'time',
-            12=>'datetime',
-            13=>'year',
-            16=>'bit',
-            //252 is currently mapped to all text and blob types (MySQL 5.0.51a)
-            253=>'varchar',
-            254=>'char',
-            246=>'decimal'
-        );
-        return $mysqlFieldTypeMap[$fieldTypeCode] == 'datetime';
+        // Keeping this code/type map for future reference as we'll probably want to implement better conversion
+//        $mysqlFieldTypeMap = array(
+//            1=>'tinyint',
+//            2=>'smallint',
+//            3=>'int',
+//            4=>'float',
+//            5=>'double',
+//            7=>'timestamp',
+//            8=>'bigint',
+//            9=>'mediumint',
+//            10=>'date',
+//            11=>'time',
+//            12=>'datetime',
+//            13=>'year',
+//            16=>'bit',
+//            //252 is currently mapped to all text and blob types (MySQL 5.0.51a)
+//            253=>'varchar',
+//            254=>'char',
+//            246=>'decimal'
+//        );
+        return $fieldTypeCode == self::TYPECODE_DATETIME;
     }
 
+    /**
+     * Builds the result array from a result, performing any required output type conversion (i.e. DATETIME=>DateTime)
+     *
+     * @param mysqli_result $result the result
+     * @param string $className the name of the class to instantiate when fetching
+     * @return array array of fetched results
+     * @throws Exception in the event there is a problem converting a type
+     */
     private function _buildResults(mysqli_result $result, $className)
     {
         $dateFieldNames = array();
