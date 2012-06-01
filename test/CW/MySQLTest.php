@@ -19,7 +19,7 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
     private $barney;
     private $alice;
 
-    private $_db;
+    protected $_db;
 
     public function setup() {
 
@@ -49,7 +49,7 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
      * @param $balance
      * @throws Exception
      */
-    private function rawRowInsert(mysqli $db, $firstname, $lastname, $age, DateTime $createdDate, $balance, $realBalance) {
+    protected function rawRowInsert(mysqli $db, $firstname, $lastname, $age, DateTime $createdDate, $balance, $realBalance) {
         $formattedDate = $createdDate->format('Y-m-d H:i:s');
         if(!$statement = $db->stmt_init()) {
             throw new Exception('Error creating prepared statement: ' . $db->error);
@@ -70,7 +70,7 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
      *
      * DROPs the database if it exists, (re-)creates it and then inserts 3 rows of test data
      */
-    private function initialiseDatabase() {
+    protected function initialiseDatabase() {
         $fred = array('firstname' => 'fred', 'lastname' => 'flintstone', 'age' => 11, 'createdDate' => new DateTime('2001-01-01 11:11:11'), 'balance' => 1.11, 'realBalance' => 0.11);
         $barney = array('firstname' => 'Barney', 'lastname' => 'Rubble', 'age' => 12, 'createdDate' => new DateTime('2012-12-12 12:12:12'), 'balance' => 12.12, 'realBalance' => 0.12);
         $alice = array('firstname' => 'Alice', 'lastname' => 'Jones', 'age' => 21, 'createdDate' => new DateTime('1990-04-21 21:21:21'), 'balance' => 0.21, 'realBalance' => 2.1);

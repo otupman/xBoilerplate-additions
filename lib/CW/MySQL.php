@@ -164,7 +164,11 @@ class CW_MySQL
             throw self::createQueryException('Error executing query', self::$_db, $query);
         }
 
-        return $statement->get_result();
+        $result = $statement->get_result();
+        if($result === false) {
+            throw self::createQueryException('Error executing query', $statement, $query);
+        }
+        return $result;
     }
 
 
@@ -495,6 +499,8 @@ class CW_MySQL
      */
     protected function getType($value, $typeHint = null) {
         switch(gettype($value)) {
+            case 'NULL':
+                return 's';
             case 'integer':
                 return 'i';
             case 'double':
@@ -584,9 +590,9 @@ class CW_MySQL
                 }
             }
         }
-
         $results = array();
         while (($row = $result->fetch_object($className)) != null) {
+
 //            $row = (array)$row;
             foreach($dateFieldNames as $fieldName) {
                 try {
@@ -693,7 +699,7 @@ class CW_MySQL
             $stmt->close();
         }
         else
-            throw new  Exception("Error: " .$stmt->error);
+            throw $this->createQueryException('Error preparing insert statement', $stmt, $sql);
     }
 
     public function delete($table, $where) {
