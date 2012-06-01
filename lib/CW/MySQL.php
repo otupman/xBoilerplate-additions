@@ -721,25 +721,34 @@ class CW_MySQL
         $sql = $update.$set.$whereP;
 
         if($stmt = self::$_db->prepare($sql)) {
-            $whereClause = $this->createParameters($where);
-            $values = array();
+            $whereType = $this->_checkTypeOfValues($where);
             $dataType = $this->_checkTypeOfValues($data);
+            $t = array_merge($dataType, $whereType);
+
             $type = '';
             //getting first letter from each of value type
-            foreach($dataType as $word) {
+            foreach($t as $word) {
                 $letter = substr($word, 0, 1);
                 $type .= $letter;
             }
 
-            //bind param
-            $q = array();
-            foreach($data as $key=>$value) {
-                $q[] = &$value;
+            $clause = array_merge($data, $where);
+            $values = array();
+            $v = $clause;
+
+            foreach($v as &$value) {
+                array_push($values, &$value);
             }
 
-            //call_user_func_array(array($stmt, 'bind_param'), array_merge(array(&$type), $q));
-
-            $stmt->execute();
+            $functionParams = array_merge(array(&$type), $values);
+            if(call_user_func_array(array($stmt, 'bind_param'), $functionParams)){
+                if($stmt->execute()) {
+                    return ($stmt->affected_rows);
+                }
+            }
+            else {
+                throw new Exception('Error: ' .$stmt->error);
+            }
         }
         else {
             throw new Exception('Error preparing: ' . self::$_db->error);
