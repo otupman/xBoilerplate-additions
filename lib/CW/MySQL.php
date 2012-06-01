@@ -49,10 +49,17 @@ class CW_MySQL
      * @return CW_MySQL
      */
     public static function getInstance() {
+
         if (!self::$_object) {
+//            self::checkCorrectVersion();
             self::$_object = new self();
         }
         return self::$_object;
+    }
+
+    private static function checkCorrectVersion() {
+        //TODO Implement version check
+        phpversion();
     }
 
 

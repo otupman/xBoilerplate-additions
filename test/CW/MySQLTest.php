@@ -49,15 +49,15 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
      * @param $balance
      * @throws Exception
      */
-    private function rawRowInsert(mysqli $db, $firstname, $lastname, $age, DateTime $createdDate, $balance) {
+    private function rawRowInsert(mysqli $db, $firstname, $lastname, $age, DateTime $createdDate, $balance, $realBalance) {
         $formattedDate = $createdDate->format('Y-m-d H:i:s');
         if(!$statement = $db->stmt_init()) {
             throw new Exception('Error creating prepared statement: ' . $db->error);
         }
-        if(!$statement->prepare('INSERT INTO people (firstname, lastname, age, createdDate, balance) VALUES (?, ?, ?, ?, ?)')) {
+        if(!$statement->prepare('INSERT INTO people (firstname, lastname, age, createdDate, balance, realBalance) VALUES (?, ?, ?, ?, ?, ?)')) {
             throw new Exception('Error preparing insert query: ' . $statement->error);
         }
-        if(!$statement->bind_param('ssisd', $firstname, $lastname, $age, $formattedDate, $balance)) {
+        if(!$statement->bind_param('ssisdi', $firstname, $lastname, $age, $formattedDate, $balance, $realBalance)) {
             throw new Exception('Error binding parameters: ' . $statement->error);
         }
         if(!$statement->execute()) {
@@ -71,9 +71,9 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
      * DROPs the database if it exists, (re-)creates it and then inserts 3 rows of test data
      */
     private function initialiseDatabase() {
-        $fred = array('firstname' => 'fred', 'lastname' => 'flintstone', 'age' => 11, 'createdDate' => new DateTime('2001-01-01 11:11:11'), 'balance' => 1.11);
-        $barney = array('firstname' => 'Barney', 'lastname' => 'Rubble', 'age' => 12, 'createdDate' => new DateTime('2012-12-12 12:12:12'), 'balance' => 12.12);
-        $alice = array('firstname' => 'Alice', 'lastname' => 'Jones', 'age' => 21, 'createdDate' => new DateTime('1990-04-21 21:21:21'), 'balance' => 0.21);
+        $fred = array('firstname' => 'fred', 'lastname' => 'flintstone', 'age' => 11, 'createdDate' => new DateTime('2001-01-01 11:11:11'), 'balance' => 1.11, 'realBalance' => 0.11);
+        $barney = array('firstname' => 'Barney', 'lastname' => 'Rubble', 'age' => 12, 'createdDate' => new DateTime('2012-12-12 12:12:12'), 'balance' => 12.12, 'realBalance' => 0.12);
+        $alice = array('firstname' => 'Alice', 'lastname' => 'Jones', 'age' => 21, 'createdDate' => new DateTime('1990-04-21 21:21:21'), 'balance' => 0.21, 'realBalance' => 2.1);
 
         $db = new mysqli(self::DB_HOST, self::DB_USER, self::DB_PASS, self::DB_SCHEMA);
 
@@ -84,15 +84,16 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
            firstname VARCHAR(255) NOT NULL,
            lastname VARCHAR(255) NOT NULL,
            age INT,
-           createdDate DATETIME NOT NULL,
-           balance FLOAT NOT NULL,
+           createdDate DATETIME,
+           balance FLOAT,
+           realBalance DECIMAL,
            `from` DATETIME
           );';
         $db->query($createQuery);
 
-        $this->rawRowInsert($db, $fred['firstname'], $fred['lastname'], $fred['age'], $fred['createdDate'], $fred['balance']);
-        $this->rawRowInsert($db, $barney['firstname'], $barney['lastname'], $barney['age'], $barney['createdDate'], $fred['balance']);
-        $this->rawRowInsert($db, $alice['firstname'], $alice['lastname'], $alice['age'], $alice['createdDate'], $fred['balance']);
+        $this->rawRowInsert($db, $fred['firstname'], $fred['lastname'], $fred['age'], $fred['createdDate'], $fred['balance'], $fred['realBalance']);
+        $this->rawRowInsert($db, $barney['firstname'], $barney['lastname'], $barney['age'], $barney['createdDate'], $barney['balance'], $barney['realBalance']);
+        $this->rawRowInsert($db, $alice['firstname'], $alice['lastname'], $alice['age'], $alice['createdDate'], $alice['balance'], $alice['realBalance']);
 
         $this->fred = $fred;
         $this->barney = $barney;
@@ -264,7 +265,7 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
     }
 
     public function testSelect_everyColumn() {
-        $allColumns = array('firstname', 'lastname', 'age', 'createdDate');
+        $allColumns = array('firstname', 'lastname', 'age', 'createdDate', 'balance', 'realBalance');
         $people = CW_MySQL::getInstance()->select($allColumns, 'people', array('firstname' => 'Barney'));
         $this->assertEquals(1, sizeof($people), 'Firstname where of Barney failed');
 
@@ -296,6 +297,11 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
         $fredAgain = $people[0];
         $this->assertEquals($this->fred['balance'], $fredAgain->balance, 'Balance search of 1.11 failed (for Fred)');
 
+        $people = CW_MySQL::getInstance()->select($allColumns, 'people', array('realBalance' => $this->alice['realBalance']));
+        $this->assertEquals(1, sizeof($people));
+
+        $aliceAgain = $people[0];
+        $this->assertEquals($this->alice['firstname'], $aliceAgain->firstname);
     }
 
     /**
@@ -365,9 +371,26 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
         $this->assertEquals($age, $testUser->age, 'From selectRow(): Age does not match');
         $this->assertEquals($lastname, $testUser->lastname, 'From selectRow(): Lastname does not match');
         $this->assertEquals($createdDate, $testUser->createdDate, 'From selectRow(): Created date does not match');
+
     }
 
+    public function testInsert_withHardDataTypes() {
+        $balance = 0.22;
+        $id = CW_MySQL::getInstance()->insert('people',
+            array('firstname' => 'balanceTest1', 'lastname' => 'surnamebt1', 'age' => 23, 'balance' => $balance,
+                    'realBalance' => $balance));
 
+        $results = CW_MySQL::getInstance()->query('SELECT balance, realBalance FROM people WHERE id = ' . $id);
+        $addedPerson = $results->fetch_object();
+        $tolerance = 0.001;
+        $difference = abs($balance - $addedPerson->balance);
+        $this->assertTrue($difference < $tolerance);
+
+
+        $this->assertEquals($balance, $addedPerson->realBalance);
+
+
+    }
 
 
     public function testDelete() {
