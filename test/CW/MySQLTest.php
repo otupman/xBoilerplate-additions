@@ -32,8 +32,8 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
             , 'password' => self::DB_PASS
             , 'schema' => self::DB_SCHEMA
         );
-        PvtTestXBoilerplate::overrideStandardXBoilerplate();
-        PvtTestXBoilerplate::$config = (object)$this->config;
+        CW_TestXBoilerplate::overrideStandardXBoilerplate();
+        CW_TestXBoilerplate::$config = (object)$this->config;
 
         $this->initialiseDatabase();
 
@@ -463,26 +463,5 @@ class Person {
 
     public function getLastname() {
         return $this->lastname;
-    }
-}
-
-/**
- * Private class that allows the test to override the configuration storage and set it's own without having to load
- * it from a configuration file.
- */
-class PvtTestXBoilerplate extends xBoilerplate {
-    public static $config;
-
-    /**
-     * Triggers the overriding of the standard xBoilerplate singleton with this version.
-     * @static
-     *
-     */
-    public static function overrideStandardXBoilerplate() {
-        xBoilerplate::$_instance = new PvtTestXBoilerplate();
-    }
-
-    public function getConfig() {
-        return self::$config;
     }
 }

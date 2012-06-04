@@ -21,7 +21,7 @@ class xBoilerplate {
      * Your index.php should handle the post-instantiation initialisation by calling pageStart().
      *
      * @static
-     * @return an instantiated instance of xBoilerplate
+     * @return xBoilerplate an instantiated instance of xBoilerplate
      */
     public static function getInstance() {
         if(self::$_instance == null) {
@@ -292,9 +292,10 @@ class xBoilerplate {
 	/**
 	 * Loads a file relative to the base path
 	 *
-	 * @param strin $file Path to file
+	 * @param string $file Path to file
 	 * @return string
 	 * @throws Exception If invalid file
+     * @throws UnexpectedValueException in case there is an issue with the file
 	 */
 	protected function _loadFile($file) {
 		// TODO: add more security checks

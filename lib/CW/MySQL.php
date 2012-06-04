@@ -108,7 +108,7 @@ class CW_MySQL
      * Loads the configuration from xBoilerplate
      *
      * @param xBoilerplate $xBoilerplate the xBoilerplate instance
-     * @return configuration entry for database details
+     * @return array|associative configuration entry for database details
      * @throws RuntimeException in the event that there is no 'db' property on the xBoilerplate configuration
      */
     protected function loadConfig(xBoilerplate $xBoilerplate)
@@ -127,7 +127,7 @@ class CW_MySQL
     /**
      * Checks the supplied configuration for any missing config settings and throws an exception if any are found
      *
-     * @param $dbConfig db configuration array
+     * @param array|associative $dbConfig db configuration array
      * @throws RuntimeException if any required config key is not found
      */
     private function checkConfig($dbConfig) {
@@ -207,7 +207,7 @@ class CW_MySQL
      * array('firstname >' => 'otherValue') - `firstname` > ?
      *
      * @param string $rawCondition string the raw condition passed in by the client
-     * @returns string the fully-built condition ready for SQL
+     * @return string the fully-built condition ready for SQL
      */
     protected function buildCondition($rawCondition) {
         $rawCondition = trim($rawCondition);
@@ -372,7 +372,7 @@ class CW_MySQL
     /**
      * Builds the order clauses from the incoming data, if any are present
      *
-     * @param $order the order to build from
+     * @param array $order the order to build from
      * @return array containing the build SQL order clauses
      * @throws InvalidArgumentException in the event that any of the incoming data is invalid (i.e. ASK instead of ASC)
      */
@@ -404,7 +404,7 @@ class CW_MySQL
      * See select() for more information about each parameter
      *
      * @param array $columns the columns to retrieve
-     * @param $table the table to retrieve from
+     * @param string $table the table to retrieve from
      * @param array $where the where clause to filter the results by
      * @param string $className optional; the name of the class to instantiate, if not passed, stdClass is used
      *
@@ -429,30 +429,28 @@ class CW_MySQL
     /**
      * Creates the SQL for the parameters to a LIMIT clause
      *
-     * @param $limit the incoming limit arguments
+     * @param mixed $limit the incoming limit arguments
      * @return string the string ready to be appended to a LIMIT clause
      * @throws InvalidArgumentException in the event that the incoming limit arguments are not correct
      */
     private function createLimitSql($limit)
     {
-        $limitValue = '';
         if (is_numeric($limit)) {
             $limitValue = $limit;
-            return $limitValue;
         }
         else if (is_array($limit) && sizeof($limit) == 2) {
             $limitValue = $limit[0] . ',' . $limit[1];
-            return $limitValue;
         }
         else {
             throw new InvalidArgumentException('Limit must either be a single numeric, or a 2-element array of integers');
         }
+        return $limitValue;
     }
 
     /**
      * Generates a 'WHERE x,y,z' clause
      *
-     * @param $whereClause there where parameters
+     * @param PrivateQueryParameters $whereClause there where parameters
      * @return string the string of the where clause, if parameters are present; otherwise, a empty string
      */
     private function generateWhere($whereClause)
@@ -471,8 +469,8 @@ class CW_MySQL
      *
      * This method can be overridden by deriving classes to provide custom-type handling
      *
-     * @param $value the value to get the type of; must be an object
-     * @param $typeHint the hint TODO: really needed?
+     * @param object $value the value to get the type of; must be an object
+     * @param mixed $typeHint the hint TODO: really needed?
      * @return string the single-character type value for the object
      * @throws Exception if the type of the value is not supported
      */
@@ -488,7 +486,7 @@ class CW_MySQL
     /**
      * Obtains the mysqli type character for the supplied value, using any hinting provided
      *
-     * @param $value the value to get the type of
+     * @param mixed $value the value to get the type of
      * @param string $typeHint name of the type that the value is
      * @return string the single character representation of the type
      * @throws Exception in the event the type of the value is unsupported
@@ -538,7 +536,7 @@ class CW_MySQL
     /**
      * Determines if the type code supplied is for a datetime or not
      *
-     * @param $fieldTypeCode the code from a fetch_field_direct call
+     * @param integer $fieldTypeCode the code from a fetch_field_direct call
      * @return bool true if the code is for a DATETIME; otherwise false
      */
     private function isDateField($fieldTypeCode) {
@@ -607,9 +605,9 @@ class CW_MySQL
      *
      *
      * @static
-     * @param $message the message to be reported
-     * @param $dbObject the mysqli object that experienced the error
-     * @param $query the query that was/should be executed
+     * @param string $message the message to be reported
+     * @param mysqli $dbObject the mysqli object that experienced the error
+     * @param string $query the query that was/should be executed
      * @return Exception the exception, ready for throwing
      */
     protected static function createQueryException($message, $dbObject, $query) {
@@ -784,9 +782,9 @@ class PrivateQueryParameters {
     /**
      * Adds an additional query clause to the parameters
      *
-     * @param $condition the condition; must be in the format [fieldname] [operator] ?
-     * @param $type the mysqli type of the value
-     * @param $value the value
+     * @param string $condition the condition; must be in the format [fieldname] [operator] ?
+     * @param integer $type the mysqli type of the value
+     * @param mixed $value the value
      * @return PrivateQueryParameters this for further building
      */
     public function addClause($condition, $type, $value) {
