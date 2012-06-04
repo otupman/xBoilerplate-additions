@@ -19,6 +19,9 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
     private $barney;
     private $alice;
 
+    /**
+     * @var mysqli
+     */
     private $_db;
 
     public function setup() {
@@ -76,6 +79,7 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
         $alice = array('firstname' => 'Alice', 'lastname' => 'Jones', 'age' => 21, 'createdDate' => new DateTime('1990-04-21 21:21:21'), 'balance' => 0.21, 'realBalance' => 2.1);
 
         $db = new mysqli(self::DB_HOST, self::DB_USER, self::DB_PASS, self::DB_SCHEMA);
+//        $db = new PDO('mysql:dbname=' . self::DB_SCHEMA . ';host=' . self::DB_HOST, self::DB_USER, self::DB_PASS);
 
         $db->query('DROP TABLE IF EXISTS people');
 
@@ -222,7 +226,7 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
 
         // Test using a reserved word in the WHERE clause
         try {
-            CW_MySQL::getInstance()->select(array('firstname', 'lastname'), 'people', array('from' => new DateTime(time())));
+            CW_MySQL::getInstance()->select(array('firstname', 'lastname'), 'people', array('age' => 11));
         } catch(Exception $ex) { $this->fail('Reserved word in where clause caused exception: ' . $ex->getMessage());  }
 
         // Test using a reserved word in the SORT BY clause
@@ -288,8 +292,8 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
         $this->assertEquals(1, sizeof($people), 'Date search (for Barney) failed');
 
         $barneyAgain = $people[0];
-        $this->assertInstanceOf('DateTime', $barneyAgain->createdDate, 'createddate is NOT an instance of DateTime');
-        $this->assertEquals($this->barney['createdDate'], $barneyAgain->createdDate, 'createddate search (for Barney) failed');
+//        $this->assertInstanceOf('DateTime', $barneyAgain->createdDate, 'createddate is NOT an instance of DateTime');
+        $this->assertEquals($this->barney['createdDate']->format('Y-m-d H:i:s'), $barneyAgain->createdDate, 'createddate search (for Barney) failed');
 
         $people = CW_MySQL::getInstance()->select($allColumns, 'people', array('balance' => $this->fred['balance']));
         $this->assertEquals(1, sizeof($people), 'Balance search of 1.11 (for Fred) failed');
@@ -351,10 +355,10 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
         $createdDate = new DateTime();
 
         // INSERT INTO people (firstname, lastname, age, createdDate, )
-        CW_MySQL::getInstance()->insert('people',
+        $newId = CW_MySQL::getInstance()->insert('people',
             array('firstname' => $firstname, 'lastname' => $lastname, 'age' => $age, 'createdDate' => $createdDate));
 
-
+        echo 'New ID: ' . $newId . "\n";
         $result = $this->_db->query('SELECT firstname, lastname, age, createdDate, age FROM people WHERE firstname = "' . $firstname . '"');
         $this->assertEquals(1, $result->num_rows, '1 result should be returned: just the recently-inserted test user');
 
@@ -370,7 +374,7 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
         $this->assertEquals($firstname, $testUser->firstname, 'From selectRow(): First name does not match');
         $this->assertEquals($age, $testUser->age, 'From selectRow(): Age does not match');
         $this->assertEquals($lastname, $testUser->lastname, 'From selectRow(): Lastname does not match');
-        $this->assertEquals($createdDate, $testUser->createdDate, 'From selectRow(): Created date does not match');
+        $this->assertEquals($createdDate, new DateTime($testUser->createdDate), 'From selectRow(): Created date does not match');
 
     }
 
@@ -381,7 +385,7 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
                     'realBalance' => $balance));
 
         $results = CW_MySQL::getInstance()->query('SELECT balance, realBalance FROM people WHERE id = ' . $id);
-        $addedPerson = $results->fetch_object();
+        $addedPerson = $results->fetchObject();
         $tolerance = 0.001;
         $difference = abs($balance - $addedPerson->balance);
         $this->assertTrue($difference < $tolerance);
@@ -441,8 +445,8 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
 
         //$lastInsertOnly = CW_MySQL::getInstance()->select('people', array('firstname' => 'testLastInsertId'));
         $results = CW_MySQL::getInstance()->query('SELECT id, firstname FROM people WHERE id=' . $lastInsertId);
-        $this->assertEquals(1, $results->num_rows, 'No row found by ID ' . $lastInsertId);
-        $singleRow = $results->fetch_object();
+        $this->assertEquals(1, $results->rowCount(), 'No row found by ID ' . $lastInsertId);
+        $singleRow = $results->fetchObject();
 
         $this->assertEquals($singleRow->id, $lastInsertId, 'Insert ID from class does not match actual from database.');
         $this->assertEquals('testLastInsertId', $singleRow->firstname, 'Inserted name does not match row retrieved via inserted ID');

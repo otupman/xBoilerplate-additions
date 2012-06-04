@@ -38,7 +38,7 @@ class CW_MySQL
      *
      * The static mysqli instance that the class uses
      *
-     * @var mysqli
+     * @var PDO
      */
     protected static $_db = null;
 
@@ -98,9 +98,13 @@ class CW_MySQL
      */
     protected function openConnection($config)
     {
-        self::$_db = new mysqli($config->host, $config->username, $config->password, $config->schema);
-        if (self::$_db === false) {
-            throw new Exception('Error connecting to database: ' . mysqli_error(self::$_db));
+        //self::$_db = new mysqli($config->host, $config->username, $config->password, $config->schema);
+        $dsn = 'mysql:dbname=' . $config->schema . ';host=' . $config->host;
+        try {
+            self::$_db = new PDO($dsn, $config->username, $config->password);
+            self::$_db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        } catch (PDOException $ex) {
+            throw new Exception('Error connecting to database: ' . $ex->getMessage(), 0, $ex);
         }
     }
 
@@ -152,19 +156,26 @@ class CW_MySQL
      *
      * @param string $query the query to execute
      * @throws Exception in the event of any SQL exceptions occur
-     * @return mysqli_result
+     * @return PDOStatement
      */
     public function query($query) {
-        $statement = self::$_db->prepare($query);
-        if($statement === false) {
-            throw self::createQueryException('Error preparing query for execution', self::$_db, $query);
+        try {
+            $statement = self::$_db->prepare($query);
+        } catch(PDOException $ex) {
+            throw self::createPdoException('Error preparing query ', $ex);
         }
 
-        if(!$statement->execute()) {
-            throw self::createQueryException('Error executing query', self::$_db, $query);
+        try {
+            $statement->execute();
+        } catch(PDOException $ex) {
+            throw self::createPdoException('Error executing query', $ex);
         }
 
-        return $statement->get_result();
+        return $statement;
+    }
+
+    private static function createPdoException($message, PDOException $ex) {
+        return new Exception($message . $ex->getMessage(), 0, $ex);
     }
 
 
@@ -320,24 +331,39 @@ class CW_MySQL
             $query.= ' LIMIT ' . $this->createLimitSql($limit);
         }
 
-        $statement = self::$_db->prepare($query);
-        if($statement === false) {
-            throw self::createQueryException('Could not prepare query', self::$_db, $query);
+        try {
+            $statement = self::$_db->prepare($query);
+        } catch(PDOException $ex) {
+            throw self::createPdoException('Could not prepare query', $ex);
         }
 
 
         if(!$whereClause->isEmpty()) {
-            $values = array();
-            foreach($whereClause->getValues() as $value) {
-                $values[] = &$value;
-            }
-            $typeList = $whereClause->getTypeList();
-            $functionParams = array_merge(array(&$typeList), $values);
-
-            call_user_func_array(array($statement, 'bind_param'), $functionParams);
+            $this->bindQueryParameters($whereClause->getValues(), $statement);
         }
 
         return $this->executeSelectStatement($statement, $query, $className);
+    }
+
+    protected function bindQueryParameters(array $whereValues, PDOStatement $statement)
+    {
+        $index = 1;
+        foreach($whereValues as &$value) {
+            $valueType = $this->getType($value);
+            $value = $this->convertValue($value, $valueType);
+
+            $statement->bindParam($index, $value, $valueType);
+            $index++;
+        }
+        return $statement;
+//        $values = array();
+//        foreach ($whereClause->getValues() as $value) {
+//            $values[] = &$value;
+//        }
+//        $typeList = $whereClause->getTypeList();
+//        $functionParams = array_merge(array(&$typeList), $values);
+//
+//        call_user_func_array(array($statement, 'bind_param'), $functionParams);
     }
 
     /**
@@ -476,7 +502,7 @@ class CW_MySQL
      */
     protected function getObjectType($value, $typeHint) {
         if($value instanceof DateTime) {
-            return 's';
+            return PDO::PARAM_STR;
         }
         else {
             throw new Exception('Unsupported type of ' . get_class($value));
@@ -494,11 +520,11 @@ class CW_MySQL
     protected function getType($value, $typeHint = null) {
         switch(gettype($value)) {
             case 'integer':
-                return 'i';
+                return PDO::PARAM_INT;
             case 'double':
-                return 'd';
+                return PDO::PARAM_INT;
             case 'string':
-                return 's';
+                return PDO::PARAM_STR;
             case 'object':
                 return $this->getObjectType($value, $typeHint);
             default:
@@ -509,24 +535,22 @@ class CW_MySQL
     /**
      * executes the statement of the supplied query, retriving rows with the class name
      *
-     * @param mysqli_stmt $statement
-     * @param $query
-     * @param $className
+     * @param PDOStatement $statement
+     * @param string $query
+     * @param string $className
      * @return array
      * @throws Exception
      */
-    private function executeSelectStatement(mysqli_stmt $statement, $query, $className)
+    private function executeSelectStatement(PDOStatement $statement, $query, $className)
     {
-        if (!$statement->execute()) {
-            throw self::createQueryException('Error executing query', $statement, $query);
+        try {
+            $statement->execute();
+        } catch(PDOException $ex) {
+            throw self::createPdoException('Error executing query: ' . $query, $ex);
         }
 
-        $result = $statement->get_result();
-        if ($result === false) {
-            throw self::createQueryException('Error getting results', $statement, $query);
-        }
-        $results = $this->_buildResults($result, $className);
-        $statement->close();
+        $results = $this->_buildResults($statement, $className);
+
 
         return $results;
     }
@@ -571,28 +595,29 @@ class CW_MySQL
      * @return array array of fetched results
      * @throws Exception in the event there is a problem converting a type
      */
-    private function _buildResults(mysqli_result $result, $className)
+    private function _buildResults(PDOStatement $result, $className)
     {
-        $dateFieldNames = array();
-        for($i = 0; $i < $result->field_count; $i++) {
-            $fieldMetadata = $result->fetch_field_direct($i);
-            if($fieldMetadata !== false) {
-                if($this->isDateField($fieldMetadata->type)) {
-                    $dateFieldNames[] = $fieldMetadata->name;
-                }
-            }
-        }
+//        $dateFieldNames = array();
+//        for($i = 0; $i < $result->field_count; $i++) {
+//            $fieldMetadata = $result->fetch_field_direct($i);
+//            if($fieldMetadata !== false) {
+//                PDO::PARAM
+//                if($this->isDateField($fieldMetadata->type)) {
+//                    $dateFieldNames[] = $fieldMetadata->name;
+//                }
+//            }
+//        }
 
         $results = array();
-        while (($row = $result->fetch_object($className)) != null) {
+        while (($row = $result->fetchObject($className)) !== false) {
 //            $row = (array)$row;
-            foreach($dateFieldNames as $fieldName) {
-                try {
-                    $row->$fieldName = new DateTime($row->$fieldName);
-                } catch(Exception $ex) {
-                    throw new Exception('Error parsing DateTime - ' . $ex->getMessage() . ' - and the value was: [' . $row->$fieldName . '] on column [' . $fieldName . ']');
-                }
-            }
+//            foreach($dateFieldNames as $fieldName) {
+//                try {
+//                    $row->$fieldName = new DateTime($row->$fieldName);
+//                } catch(Exception $ex) {
+//                    throw new Exception('Error parsing DateTime - ' . $ex->getMessage() . ' - and the value was: [' . $row->$fieldName . '] on column [' . $fieldName . ']');
+//                }
+//            }
 
             $results[] = $row;
         }
@@ -616,7 +641,7 @@ class CW_MySQL
             . ' for query: '
             . $query);
     }
-    private function _createValues($numberOfValues) {
+    private function _createPlaceholders($numberOfValues) {
         $values = '';
 
         for($i=1; $i <= $numberOfValues; $i++) {
@@ -641,57 +666,46 @@ class CW_MySQL
 
     public function insert($table, array $data) {
         //create prepare statement, etc. INSERT INTO `people` (`firstname`, `lastname`, `age`, `createdDate`) VALUES (?, ?, ?, ?)
+        $columnNames = $this->buildInsertColumns($data);
+        $parameterPlaceholders = $this->_createPlaceholders(count($data));
+
+        $query = 'INSERT INTO `'.$table.'` ' .$columnNames;
+        $query.= ' VALUES ('.$parameterPlaceholders.')';
+
+        $statement = $this->prepareQuery($query);
+
+        $whereClause = $this->createParameters($data);
+
+        $this->bindQueryParameters($whereClause->getValues(), $statement);
+
+        try {
+            $statement->execute();
+        } catch(PDOException $ex) {
+            throw self::createPdoException('Error executing insert statement', $ex);
+        }
+        return self::$_db->lastInsertId();
+    }
+
+    private function prepareQuery($query)
+    {
+        try {
+            $statement = self::$_db->prepare($query);
+            return $statement;
+        } catch (PDOException $ex) {
+            throw self::createPdoException('Could not prepare query', $ex);
+        }
+    }
+
+    public function buildInsertColumns($data)
+    {
         $keys = array_keys($data);
         $dbColumnName = '(';
-        foreach($keys as $key) {
-            $dbColumnName .= '`'.$key.'`, ';
+        foreach ($keys as $key) {
+            $dbColumnName .= '`' . $key . '`, ';
         }
         $dbColumnName = substr($dbColumnName, 0, -2);
         $dbColumnName .= ')';
-
-        $table = 'INSERT INTO `'.$table.'` ' .$dbColumnName;
-
-        $numberOfValues = count($data);
-        $values = $this->_createValues($numberOfValues);
-
-        $dataType = $this->_checkTypeOfValues($data);
-        $type = '';
-        //getting first letter from each of value type
-        foreach($dataType as $word) {
-            $letter = substr($word, 0, 1);
-            $type .= $letter;
-        }
-
-        $dataValues = (count($data) >= 1) ? ' VALUES ('.$values.')' : '';
-        $sql= $table.$dataValues;
-
-        //$stmt initialization
-        $stmt = self::$_db->stmt_init();
-
-        //prepare statement
-        if($sqlPrepare = $stmt->prepare($sql)) {
-            $whereClause = $this->createParameters($data);
-
-            $values = array();
-            $v = $whereClause->getValues();
-            foreach($v as &$value) {
-                array_push($values, &$value);
-            }
-            $typeList = $whereClause->getTypeList();
-            $functionParams = array_merge(array(&$typeList), $values);
-            call_user_func_array(array($stmt, 'bind_param'), $functionParams);
-
-            $result = $stmt->execute();
-            if (true === $result) {
-                return ($stmt->insert_id);
-            }
-            else {
-                throw new Exception('Error: ' .$stmt->error);
-            }
-            $stmt->close();
-        }
-        else
-            throw new  Exception("Error: " .$stmt->error);
+        return $dbColumnName;
     }
 
     public function delete($table, $where) {
@@ -718,43 +732,38 @@ class CW_MySQL
         $whereP = ' WHERE ' .$variableWhere;
         $sql = $update.$set.$whereP;
 
-        if($stmt = self::$_db->prepare($sql)) {
-            $whereType = $this->_checkTypeOfValues($where);
-            $dataType = $this->_checkTypeOfValues($data);
-            $t = array_merge($dataType, $whereType);
+        try {
+            $stmt = self::$_db->prepare($sql);
+        } catch(PDOException $ex) {
+            throw self::createPdoException('Error preparing update query', $ex);
+        }
 
-            $type = '';
-            //getting first letter from each of value type
-            foreach($t as $word) {
-                $letter = substr($word, 0, 1);
-                $type .= $letter;
-            }
 
-            $clause = array_merge($data, $where);
-            $values = array();
-            $v = $clause;
+        $whereType = $this->_checkTypeOfValues($where);
+        $dataType = $this->_checkTypeOfValues($data);
+        $t = array_merge($dataType, $whereType);
 
-            foreach($v as &$value) {
-                array_push($values, &$value);
-            }
+        $type = '';
+        //getting first letter from each of value type
+        foreach($t as $word) {
+            $letter = substr($word, 0, 1);
+            $type .= $letter;
+        }
 
-            $functionParams = array_merge(array(&$type), $values);
-            if(call_user_func_array(array($stmt, 'bind_param'), $functionParams)){
-                if($stmt->execute()) {
-                    return ($stmt->affected_rows);
-                }
-            }
-            else {
-                throw new Exception('Error: ' .$stmt->error);
-            }
+        $clause = array_merge($data, $where);
+        $this->bindQueryParameters($clause, $stmt);
+
+
+        if($stmt->execute()) {
+            return $stmt->rowCount();
         }
         else {
-            throw new Exception('Error preparing: ' . self::$_db->error);
+            throw new Exception('Error executing update query: ' . $stmt->errorCode());
         }
     }
 
     public function getLastInsertId() {
-        return self::$_db->insert_id;
+        return self::$_db->lastInsertId();
     }
 }
 
