@@ -6,7 +6,7 @@
  * Time: 09:23
  */
 require_once('../bootstrap.php');
-class CW_MySQLTest extends PHPUnit_Framework_TestCase
+class CW_SQLTest extends PHPUnit_Framework_TestCase
 {
     private $config;
 
@@ -111,7 +111,7 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
      */
     public function testSimplestSelect() {
         // Simple SELECT firstname, lastname FROM people
-        $people = CW_MySQL::getInstance()->select(array('id','firstname', 'lastname'), 'people');
+        $people = CW_SQL::getInstance()->select(array('id','firstname', 'lastname'), 'people');
 
         $this->assertEquals(3, sizeof($people), 'Incorrect number of rows returned');
 
@@ -133,14 +133,14 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
     public function testSelect_withLimit() {
 //        $this->markTestIncomplete('This test is not yet implemented');
         // SELECT firstname FROM people LIMIT 1
-        $onlyOneRow = CW_MySQL::getInstance()->select(array('firstname'), 'people', null, null, 1);
+        $onlyOneRow = CW_SQL::getInstance()->select(array('firstname'), 'people', null, null, 1);
 
         $this->assertEquals(1, sizeof($onlyOneRow));
 
         $this->assertEquals($this->fred['firstname'], $onlyOneRow[0]->firstname, 'Only row returned should be fred');
 
         // SELECT firstname FROM people LIMIT 1,3
-        $lastTwoRows = CW_MySQL::getInstance()->select(array('firstname'), 'people', null, null, array(1,3));
+        $lastTwoRows = CW_SQL::getInstance()->select(array('firstname'), 'people', null, null, array(1,3));
 
         $this->assertEquals(2, sizeof($lastTwoRows));
         $this->assertEquals($this->barney['firstname'], $lastTwoRows[0]->firstname, 'First row (2nd in DB) should be Barney');
@@ -152,22 +152,22 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
     public function testBadSelect() {
         //TODO: use phpunit's expected exception testing
         try {
-            CW_MySQL::getInstance()->select(array('someField'), 'non_existent_table');
+            CW_SQL::getInstance()->select(array('someField'), 'non_existent_table');
             $this->fail('Exception expected: attempting to perform a SELECT from a non-existent table');
         } catch(Exception $ex) { /* Exception expected */ }
 
         try {
-            CW_MySQL::getInstance()->select(array('nonexistentfield'), 'people');
+            CW_SQL::getInstance()->select(array('nonexistentfield'), 'people');
             $this->fail('Exception expected: attempting to perform a SELECT on a non-existent field');
         } catch(Exception $ex) { /* Exception expected */ }
 
         try {
-            CW_MySQL::getInstance()->select(array('*'), 'people');
+            CW_SQL::getInstance()->select(array('*'), 'people');
             $this->fail('Exception expected: attempting to use SELECT * syntax');
         } catch(Exception $ex) { /* Exception expected */ }
 
         try {
-            CW_MySQL::getInstance()->select('somefield', 'people');
+            CW_SQL::getInstance()->select('somefield', 'people');
             $this->fail('Exception expected: passed a string for the field selection (array expected)');
         } catch(Exception $ex) { /* Exception expected */ }
 
@@ -180,7 +180,7 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
     public function testSelect_withColumns() {
 
         // SELECT id, firstname FROM people
-        $people = CW_MySQL::getInstance()->select(array('id', 'firstname'), 'people');
+        $people = CW_SQL::getInstance()->select(array('id', 'firstname'), 'people');
 
         $this->assertObjectNotHasAttribute('lastname', $people[0], 'Lastname should not be present but is');
         $this->assertObjectHasAttribute('firstname', $people[0], 'First name should be present but is not');
@@ -188,7 +188,7 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
         $this->assertEquals($this->fred['firstname'], $fred->firstname, 'Firstname value incorrect');
 
         // SELECT id, lastname FROM people
-        $people = CW_MySQL::getInstance()->select(array('id', 'lastname'), 'people');
+        $people = CW_SQL::getInstance()->select(array('id', 'lastname'), 'people');
 
         $this->assertObjectNotHasAttribute('firstname', $people[0], 'Firstname should not be present, just: id, lastname');
     }
@@ -200,8 +200,8 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
     }
 
     public function testSelect_withObject() {
-        $people = CW_MySQL::getInstance()->select(
-            array('firstname', 'lastname', 'age'), 'people', CW_MySQL::NO_WHERE, CW_MySQL::NO_LIMIT, CW_MySQL::NO_ORDER, 'Person'
+        $people = CW_SQL::getInstance()->select(
+            array('firstname', 'lastname', 'age'), 'people', CW_SQL::NO_WHERE, CW_SQL::NO_LIMIT, CW_SQL::NO_ORDER, 'Person'
         );
 
         $this->assertEquals(3, sizeof($people));
@@ -221,17 +221,17 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
     public function testSelect_reservedWords() {
         // Test using a reserved word in the column list
         try {
-            CW_MySQL::getInstance()->select(array('from'), 'people');
+            CW_SQL::getInstance()->select(array('from'), 'people');
         } catch(Exception $ex) { $this->fail('Reserved word in field list caused exception: ' . $ex->getMessage());  }
 
         // Test using a reserved word in the WHERE clause
         try {
-            CW_MySQL::getInstance()->select(array('firstname', 'lastname'), 'people', array('age' => 11));
+            CW_SQL::getInstance()->select(array('firstname', 'lastname'), 'people', array('age' => 11));
         } catch(Exception $ex) { $this->fail('Reserved word in where clause caused exception: ' . $ex->getMessage());  }
 
         // Test using a reserved word in the SORT BY clause
         try {
-            CW_MySQL::getInstance()->select(
+            CW_SQL::getInstance()->select(
                     array('firstname', 'lastname'),
                     'people',
                     array('firstname' => 'Fred'),
@@ -242,23 +242,23 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
 
     public function testSelect_withWhere() {
         // SELECT firstname FROM people WHERE firstname = 'Bob' /* 0 results - no user with name Bob */
-        $noPeople = CW_MySQL::getInstance()->select(array('firstname'), 'people', array('firstname' => 'Bob'));
+        $noPeople = CW_SQL::getInstance()->select(array('firstname'), 'people', array('firstname' => 'Bob'));
 
         $this->assertEquals(0, sizeof($noPeople));
 
         // SELECT firstname FROM people WHERE firstname = 'fred' /* 1 result: Fred */
-        $fredOnly = CW_MySQL::getInstance()->select(array('firstname'), 'people', array('firstname' => $this->fred['firstname']));
+        $fredOnly = CW_SQL::getInstance()->select(array('firstname'), 'people', array('firstname' => $this->fred['firstname']));
 
         $this->assertEquals(1, sizeof($fredOnly));
 
         // Numeric equality test SELECT * FROM people WHERE age > 11 /* 2 results: fred & Barney */
-        $barneyOnly = CW_MySQL::getInstance()->select(array('firstname'), 'people', array('age > ' => 11));
+        $barneyOnly = CW_SQL::getInstance()->select(array('firstname'), 'people', array('age > ' => 11));
 
         $this->assertEquals(2, sizeof($barneyOnly));
         $this->assertEquals('Barney', $barneyOnly[0]->firstname, 'Barney should be the only result returned');
 
         // SELECT firstname FROM people WHERE age < 20 AND createdDate > 2000-01-01
-        $youngerUsers = CW_MySQL::getInstance()->select(array('firstname'), 'people',
+        $youngerUsers = CW_SQL::getInstance()->select(array('firstname'), 'people',
             array('age < ' => 20, 'createdDate >' => new DateTime('2001-01-01')) // Implicit AND
         );
 
@@ -270,38 +270,38 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
 
     public function testSelect_everyColumn() {
         $allColumns = array('firstname', 'lastname', 'age', 'createdDate', 'balance', 'realBalance');
-        $people = CW_MySQL::getInstance()->select($allColumns, 'people', array('firstname' => 'Barney'));
+        $people = CW_SQL::getInstance()->select($allColumns, 'people', array('firstname' => 'Barney'));
         $this->assertEquals(1, sizeof($people), 'Firstname where of Barney failed');
 
         $barney = $people[0];
         $this->assertEquals($this->barney['firstname'], $barney->firstname, 'Firstname search for Barney failed');
 
-        $people = CW_MySQL::getInstance()->select($allColumns, 'people', array('lastname' => 'Jones'));
+        $people = CW_SQL::getInstance()->select($allColumns, 'people', array('lastname' => 'Jones'));
         $this->assertEquals(1, sizeof($people), 'Lastname where of Jones failed');
 
         $alice = $people[0];
         $this->assertEquals($this->alice['lastname'], $alice->lastname, 'Lastname search of Alice failed');
 
-        $people = CW_MySQL::getInstance()->select($allColumns, 'people', array('age' => 11));
+        $people = CW_SQL::getInstance()->select($allColumns, 'people', array('age' => 11));
         $this->assertEquals(1, sizeof($people), 'Age search of 11 (Fred) failed');
 
         $fred = $people[0];
         $this->assertEquals($this->fred['age'], $fred->age, 'Age search of 11 (for Fred) failed');
 
-        $people = CW_MySQL::getInstance()->select($allColumns, 'people', array('createdDate' => new Datetime('2012-12-12 12:12:12')));
+        $people = CW_SQL::getInstance()->select($allColumns, 'people', array('createdDate' => new Datetime('2012-12-12 12:12:12')));
         $this->assertEquals(1, sizeof($people), 'Date search (for Barney) failed');
 
         $barneyAgain = $people[0];
 //        $this->assertInstanceOf('DateTime', $barneyAgain->createdDate, 'createddate is NOT an instance of DateTime');
         $this->assertEquals($this->barney['createdDate']->format('Y-m-d H:i:s'), $barneyAgain->createdDate, 'createddate search (for Barney) failed');
 
-        $people = CW_MySQL::getInstance()->select($allColumns, 'people', array('balance' => $this->fred['balance']));
+        $people = CW_SQL::getInstance()->select($allColumns, 'people', array('balance' => $this->fred['balance']));
         $this->assertEquals(1, sizeof($people), 'Balance search of 1.11 (for Fred) failed');
 
         $fredAgain = $people[0];
         $this->assertEquals($this->fred['balance'], $fredAgain->balance, 'Balance search of 1.11 failed (for Fred)');
 
-        $people = CW_MySQL::getInstance()->select($allColumns, 'people', array('realBalance' => $this->alice['realBalance']));
+        $people = CW_SQL::getInstance()->select($allColumns, 'people', array('realBalance' => $this->alice['realBalance']));
         $this->assertEquals(1, sizeof($people));
 
         $aliceAgain = $people[0];
@@ -313,12 +313,12 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
      */
     public function testSelect_withBadWhere() {
         try {
-            CW_MySQL::getInstance()->select(array('firstname'), 'people', array('firstname X' => 'Bob'));
+            CW_SQL::getInstance()->select(array('firstname'), 'people', array('firstname X' => 'Bob'));
             $this->fail('Expected exception due to an invalid operator "X"');
         } catch(Exception $ex) { /* Expected */ }
 
         try {
-            CW_MySQL::getInstance()->select(array('firstname'), 'people', array('firstname > 5' => 'Bob'));
+            CW_SQL::getInstance()->select(array('firstname'), 'people', array('firstname > 5' => 'Bob'));
             $this->fail('Expected exception due to bad WHERE clause: "firstname > 5"');
         } catch(Exception $ex) { /* Expected */ }
     }
@@ -336,7 +336,7 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
 
     public function testSelect_withSort() {
         // SELECT firstname FROM people ORDER BY age DESC
-        $aliceFirst = CW_MySQL::getInstance()->select(array('firstname'), 'people', null, array('age' => 'DESC'));
+        $aliceFirst = CW_SQL::getInstance()->select(array('firstname'), 'people', null, array('age' => 'DESC'));
 
         $alice = $aliceFirst[0];
         $this->assertEquals($this->alice['firstname'], $alice->firstname);
@@ -355,7 +355,7 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
         $createdDate = new DateTime();
 
         // INSERT INTO people (firstname, lastname, age, createdDate, )
-        $newId = CW_MySQL::getInstance()->insert('people',
+        $newId = CW_SQL::getInstance()->insert('people',
             array('firstname' => $firstname, 'lastname' => $lastname, 'age' => $age, 'createdDate' => $createdDate));
 
         echo 'New ID: ' . $newId . "\n";
@@ -369,7 +369,7 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
         $this->assertEquals($lastname, $testUser->lastname, 'Lastname does not match');
         $this->assertEquals($createdDate, new DateTime($testUser->createdDate), 'Created Date does not match');
 
-        $testUser = CW_MySQL::getInstance()->selectRow(array('firstname', 'lastname', 'age', 'createdDate'), 'people', array('age' => $age));
+        $testUser = CW_SQL::getInstance()->selectRow(array('firstname', 'lastname', 'age', 'createdDate'), 'people', array('age' => $age));
 
         $this->assertEquals($firstname, $testUser->firstname, 'From selectRow(): First name does not match');
         $this->assertEquals($age, $testUser->age, 'From selectRow(): Age does not match');
@@ -380,11 +380,11 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
 
     public function testInsert_withHardDataTypes() {
         $balance = 0.22;
-        $id = CW_MySQL::getInstance()->insert('people',
+        $id = CW_SQL::getInstance()->insert('people',
             array('firstname' => 'balanceTest1', 'lastname' => 'surnamebt1', 'age' => 23, 'balance' => $balance,
                     'realBalance' => $balance));
 
-        $results = CW_MySQL::getInstance()->query('SELECT balance, realBalance FROM people WHERE id = ' . $id);
+        $results = CW_SQL::getInstance()->query('SELECT balance, realBalance FROM people WHERE id = ' . $id);
         $addedPerson = $results->fetchObject();
         $tolerance = 0.001;
         $difference = abs($balance - $addedPerson->balance);
@@ -404,7 +404,7 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
     public function testUpdateNormal() {
         // UPDATE people SET firstname = 'Fred' WHERE firstname = 'fred'
         $fredsNewName = 'LaLinea';
-        $numRowsChanged = CW_MySQL::getInstance()->update(
+        $numRowsChanged = CW_SQL::getInstance()->update(
             'people', array('firstname' => $fredsNewName), array('age' => 11)
         );
 
@@ -424,12 +424,12 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
 
     public function testUpdate_badParameters() {
         try {
-            CW_MySQL::getInstance()->update('people', array('firstname' => 'Fred'), null);
+            CW_SQL::getInstance()->update('people', array('firstname' => 'Fred'), null);
             $this->fail('Expected exception when using null where clause');
         } catch(Exception $ex) { /* Expected */ }
 
         try {
-            CW_MySQL::getInstance()->update('people', array('firstname' => 'Fred'), array());
+            CW_SQL::getInstance()->update('people', array('firstname' => 'Fred'), array());
             $this->fail('Expected exception when using an empty array for where');
         } catch(Exception $ex) { /* Expected */ }
     }
@@ -439,12 +439,12 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
     }
 
     public function testLastInsertId() {
-        CW_MySQL::getInstance()->insert('people',
+        CW_SQL::getInstance()->insert('people',
             array('firstname' => 'testLastInsertId', 'lastname' => 'User', 'age' => 50, 'createdDate' => time()));
-        $lastInsertId = CW_MySQL::getInstance()->getLastInsertId();
+        $lastInsertId = CW_SQL::getInstance()->getLastInsertId();
 
-        //$lastInsertOnly = CW_MySQL::getInstance()->select('people', array('firstname' => 'testLastInsertId'));
-        $results = CW_MySQL::getInstance()->query('SELECT id, firstname FROM people WHERE id=' . $lastInsertId);
+        //$lastInsertOnly = CW_SQL::getInstance()->select('people', array('firstname' => 'testLastInsertId'));
+        $results = CW_SQL::getInstance()->query('SELECT id, firstname FROM people WHERE id=' . $lastInsertId);
         $this->assertEquals(1, $results->rowCount(), 'No row found by ID ' . $lastInsertId);
         $singleRow = $results->fetchObject();
 
