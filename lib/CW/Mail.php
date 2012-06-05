@@ -173,7 +173,7 @@ abstract class CW_Mail {
         $personalisedMessage = $message;
         foreach($this->_substitutions as $name => $value) {
             $substitutionName = self::SUBSTITUTION_PREFIX . $name . self::SUBSTITUTION_POSTFIX;
-            $personalisedMessage.= str_replace($substitutionName, $value, $personalisedMessage);
+            $personalisedMessage = str_replace($substitutionName, $value, $personalisedMessage);
         }
         return $personalisedMessage;
     }

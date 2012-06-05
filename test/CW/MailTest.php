@@ -130,13 +130,16 @@ class CW_MailTest extends PHPUnit_Framework_TestCase
             ->content('Some content');
 
         $mailer->personalisation('FIRSTNAME', 'Bob');
-
+        $mailer->personalisation('LASTNAME', 'Pearson');
         $message = 'Dear ' . CW_Mail::SUBSTITUTION_PREFIX . 'FIRSTNAME' . CW_Mail::SUBSTITUTION_POSTFIX . ', <br/>Welcome!';
+        $message.= 'Your surname, by the way, is '. CW_Mail::SUBSTITUTION_PREFIX . 'LASTNAME' . CW_Mail::SUBSTITUTION_POSTFIX;
         $mailer->content($message);
 
         $mailer->send();
 
-        $this->assertTrue(strpos($mailer->getContent(), 'Bob') != -1);
+        $this->assertTrue(strpos($mailer->getContent(), 'Bob') !== false, 'Firstname substitution failed.');
+        $this->assertTrue(strpos($mailer->getContent(), 'Pearson') !== false, 'Lastname substitution failed.');
+        $this->assertTrue(stripos($mailer->getContent(), '!*') === false, 'Found a substitution string still in the mail content!');
     }
 
     public function testSend_real() {
