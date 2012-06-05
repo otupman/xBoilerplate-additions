@@ -69,6 +69,7 @@ class CW_SimpleDaoTest extends CW_AbstractDbTest {
         return $dbResults;
     }
 
+
     public function testUpdate_Simple() {
         $fred = $this->_dao->loadById(array('id' => 1));
 

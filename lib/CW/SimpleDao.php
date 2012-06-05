@@ -18,7 +18,7 @@ class CW_SimpleDao
      */
     public function __construct($objectType, array $fields, $tableName) {
         $this->_objectType = $objectType;
-        $this->_db = CW_MySQL::getInstance();
+        $this->_db = CW_SQL::getInstance();
         $this->_tableName = $tableName;
         $this->_fields = $fields;
     }
@@ -29,7 +29,7 @@ class CW_SimpleDao
      * @throws Exception in the event that no such object with that ID exists
      */
     public function loadById($ids) {
-        $results = $this->_db->select($this->_fields, $this->_tableName, $ids, CW_MySQL::NO_ORDER, 1, $this->_objectType);
+        $results = $this->_db->select($this->_fields, $this->_tableName, $ids, CW_SQL::NO_ORDER, 1, $this->_objectType);
         if(sizeof($results) != 1) {
             throw new Exception('Could not find an object');
         }
@@ -37,7 +37,7 @@ class CW_SimpleDao
     }
 
     public function exists($ids) {
-        $results = $this->_db->select($this->_fields, $this->_tableName, $ids, CW_MySQL::NO_ORDER, 1, $this->_objectType);
+        $results = $this->_db->select($this->_fields, $this->_tableName, $ids, CW_SQL::NO_ORDER, 1, $this->_objectType);
         return sizeof($results) > 0;
     }
 
@@ -70,9 +70,7 @@ class CW_SimpleDao
     }
 
     public function update($item, array $ids) {
-        var_dump($item);
         $convertedItems = $this->convertObjectToArray($item);
-        var_dump($convertedItems);
         $this->_db->update($this->_tableName, $convertedItems, $ids);
     }
 

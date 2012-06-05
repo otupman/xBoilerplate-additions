@@ -33,6 +33,7 @@ class CW_AbstractDbTest extends PHPUnit_Framework_TestCase
         , 'username' => self::DB_USER
         , 'password' => self::DB_PASS
         , 'schema' => self::DB_SCHEMA
+        ,  CW_SQL::CONFIG_DEBUG => CW_SQL::DEBUG_STORELAST
         );
         PvtTestXBoilerplate::overrideStandardXBoilerplate();
         PvtTestXBoilerplate::$config = (object)$this->config;
