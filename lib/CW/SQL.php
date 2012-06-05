@@ -44,6 +44,17 @@ abstract class CW_SQL
     /** Sort operator: descending */
     const OP_DESC = 'DESC';
 
+    /** Configuration key: debug, to configure debugging options */
+    const CONFIG_DEBUG = 'debug';
+
+    /** Debug: do no debugging actions (default) */
+    const DEBUG_NONE = 'none';
+
+    /** Debug: log queries (using user_error) */
+    const DEBUG_LOG = 'log';
+    /** Debug: store the last query executed (getInstance()->lastQuery) */
+    const DEBUG_STORELAST = 'storelast';
+
     /**
      * Performs a raw-query upon the database.
      *

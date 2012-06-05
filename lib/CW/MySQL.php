@@ -92,9 +92,18 @@ class CW_MySQL extends CW_SQL
             throw new RuntimeException('Missing "db" property on configuration, have you setup it up correctly?');
         }
 
-        $config = (array)$xConfig->db;
+        $config = $xConfig->db;
         $this->checkConfig($config);
-        $config[self::CONFIG_DRIVER] = self::DRIVER_MYSQL;
+
+        $config = $this->setConfigOption((array)$config, CW_SQL::CONFIG_DEBUG, CW_SQL::DEBUG_NONE);
+        $config = $this->setConfigOption((array)$config, self::CONFIG_DRIVER, self::DRIVER_MYSQL);
+
+        return $config;
+    }
+
+
+    private function setConfigOption(array $config, $keyName, $default = null) {
+        $config[$keyName] = (array_key_exists($keyName, $config)) ? $config[$keyName] : $default;
         return $config;
     }
 
@@ -239,7 +248,10 @@ class CW_MySQL extends CW_SQL
         if(!$whereClause->isEmpty()) {
             $this->bindQueryParameters($whereClause->getValues(), $statement);
         }
-
+//        $statement->debugDumpParams();
+//        echo "Query parameters: ";
+//        var_dump($where);
+//        echo "\n";
         return $this->executeSelectStatement($statement, $query, $className);
     }
 
@@ -418,16 +430,38 @@ class CW_MySQL extends CW_SQL
      */
     private function executeSelectStatement(PDOStatement $statement, $query, $className)
     {
-        try {
-            $statement->execute();
-        } catch(PDOException $ex) {
-            throw self::createPdoException('Error executing query: ' . $query, $ex);
+        $this->executeStatement($statement);
+        $results = $this->_buildResults($statement, $className);
+        return $results;
+    }
+
+    private function logQuery(PDOStatement $statement) {
+        $debugOption = $this->config[CW_SQL::CONFIG_DEBUG];
+        if($debugOption == CW_SQL::DEBUG_NONE) {
+            return;
         }
 
-        $results = $this->_buildResults($statement, $className);
+        ob_start();
+        $statement->debugDumpParams();
+        $statementDebugInfo = ob_get_clean();
 
+        switch($debugOption) {
+            case CW_SQL::DEBUG_LOG:
+                user_error('Query executed; info: ' . $statementDebugInfo, E_USER_NOTICE);
+                break;
+            case CW_SQL::DEBUG_STORELAST:
+                $this->lastQuery = $statementDebugInfo;
+                break;
+        }
+    }
 
-        return $results;
+    private function executeStatement(PDOStatement $statement) {
+        try {
+            $this->logQuery($statement);
+            $statement->execute();
+        } catch(PDOException $ex) {
+            throw self::createPdoException('Error executing query', $ex);
+        }
     }
 
     const TYPECODE_DATETIME = 12;
@@ -535,11 +569,7 @@ class CW_MySQL extends CW_SQL
 
         $this->bindQueryParameters($whereClause->getValues(), $statement);
 
-        try {
-            $statement->execute();
-        } catch(PDOException $ex) {
-            throw self::createPdoException('Error executing insert statement', $ex);
-        }
+        $this->executeStatement($statement);
         return self::$_db->lastInsertId();
     }
 
@@ -610,13 +640,9 @@ class CW_MySQL extends CW_SQL
         $clause = array_merge($data, $where);
         $this->bindQueryParameters($clause, $stmt);
 
+        $this->executeStatement($stmt);
 
-        if($stmt->execute()) {
-            return $stmt->rowCount();
-        }
-        else {
-            throw new CW_SQLException('Error executing update query: ' . $stmt->errorCode());
-        }
+        return $stmt->rowCount();
     }
 
     public function getLastInsertId() {

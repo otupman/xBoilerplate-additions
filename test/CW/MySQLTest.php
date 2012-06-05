@@ -18,6 +18,8 @@ class CW_SQLTest extends PHPUnit_Framework_TestCase
     private $fred;
     private $barney;
     private $alice;
+    private $bob;
+    private $dirk;
 
     /**
      * @var mysqli
@@ -34,12 +36,18 @@ class CW_SQLTest extends PHPUnit_Framework_TestCase
             , 'username' => self::DB_USER
             , 'password' => self::DB_PASS
             , 'schema' => self::DB_SCHEMA
+            , CW_SQL::CONFIG_DEBUG => CW_SQL::DEBUG_STORELAST
         );
         CW_TestXBoilerplate::overrideStandardXBoilerplate();
+
         CW_TestXBoilerplate::$config = (object)$this->config;
 
         $this->initialiseDatabase();
 
+    }
+
+    private function outputLastStatement() {
+        echo "Last statement: " . CW_SQL::getInstance()->lastQuery . "\n";
     }
 
     /**
@@ -60,12 +68,16 @@ class CW_SQLTest extends PHPUnit_Framework_TestCase
         if(!$statement->prepare('INSERT INTO people (firstname, lastname, age, createdDate, balance, realBalance) VALUES (?, ?, ?, ?, ?, ?)')) {
             throw new Exception('Error preparing insert query: ' . $statement->error);
         }
-        if(!$statement->bind_param('ssisdi', $firstname, $lastname, $age, $formattedDate, $balance, $realBalance)) {
+        if(!$statement->bind_param('ssisds', $firstname, $lastname, $age, $formattedDate, $balance, $realBalance)) {
             throw new Exception('Error binding parameters: ' . $statement->error);
         }
         if(!$statement->execute()) {
             throw new Exception('Error executing parameters');
         }
+    }
+
+    private function rawPersonInsert(mysqli $db, array $person) {
+        $this->rawRowInsert($db, $person['firstname'], $person['lastname'], $person['age'], $person['createdDate'], $person['balance'], $person['realBalance']);
     }
 
     /**
@@ -74,12 +86,17 @@ class CW_SQLTest extends PHPUnit_Framework_TestCase
      * DROPs the database if it exists, (re-)creates it and then inserts 3 rows of test data
      */
     private function initialiseDatabase() {
-        $fred = array('firstname' => 'fred', 'lastname' => 'flintstone', 'age' => 11, 'createdDate' => new DateTime('2001-01-01 11:11:11'), 'balance' => 1.11, 'realBalance' => 0.11);
-        $barney = array('firstname' => 'Barney', 'lastname' => 'Rubble', 'age' => 12, 'createdDate' => new DateTime('2012-12-12 12:12:12'), 'balance' => 12.12, 'realBalance' => 0.12);
-        $alice = array('firstname' => 'Alice', 'lastname' => 'Jones', 'age' => 21, 'createdDate' => new DateTime('1990-04-21 21:21:21'), 'balance' => 0.21, 'realBalance' => 2.1);
+        // firstname / lastname / age / createdDate / balance
+        $fred =     TestHelper::createTestUser('fred',   'flintstone', 11, '2001-01-01 11:11:11', 1.11);
+        $barney =   TestHelper::createTestUser('Barney', 'Rubble',     12, '2012-12-12 12:12:12', 12.12);
+        $alice =    TestHelper::createTestUser('Alice',  'Jones',      21, '1990-04-21 21:21:21', 0.21);
+
+        $bob =      TestHelper::createTestUser('Bob', 'Newman', 31, '1980-11-11 10:10:10', 21.21);
+        $dirk =      TestHelper::createTestUser('Dirk', 'Newman', 31, '1980-04-11 10:10:10', 21.21);
+
+        $people = array($fred, $barney, $alice, $bob, $dirk);
 
         $db = new mysqli(self::DB_HOST, self::DB_USER, self::DB_PASS, self::DB_SCHEMA);
-//        $db = new PDO('mysql:dbname=' . self::DB_SCHEMA . ';host=' . self::DB_HOST, self::DB_USER, self::DB_PASS);
 
         $db->query('DROP TABLE IF EXISTS people');
 
@@ -90,18 +107,23 @@ class CW_SQLTest extends PHPUnit_Framework_TestCase
            age INT,
            createdDate DATETIME,
            balance FLOAT,
-           realBalance DECIMAL,
+           realBalance DECIMAL(5,2),
            `from` DATETIME
           );';
         $db->query($createQuery);
 
-        $this->rawRowInsert($db, $fred['firstname'], $fred['lastname'], $fred['age'], $fred['createdDate'], $fred['balance'], $fred['realBalance']);
-        $this->rawRowInsert($db, $barney['firstname'], $barney['lastname'], $barney['age'], $barney['createdDate'], $barney['balance'], $barney['realBalance']);
-        $this->rawRowInsert($db, $alice['firstname'], $alice['lastname'], $alice['age'], $alice['createdDate'], $alice['balance'], $alice['realBalance']);
+        foreach($people as $person) {
+            $this->rawRowInsert($db, $person['firstname'], $person['lastname'], $person['age'], $person['createdDate'], $person['balance'], $person['realBalance']);
+        }
+//        $this->rawRowInsert($db, $barney['firstname'], $barney['lastname'], $barney['age'], $barney['createdDate'], $barney['balance'], $barney['realBalance']);
+//        $this->rawRowInsert($db, $alice['firstname'], $alice['lastname'], $alice['age'], $alice['createdDate'], $alice['balance'], $alice['realBalance']);
+//        $this->rawRowInsert($db, $bob['firstname'], $bob['lastname'], $bob['age'], $bob['createdDate'], $bob['balance'], $bob['realBalance']);
 
         $this->fred = $fred;
         $this->barney = $barney;
         $this->alice = $alice;
+        $this->bob = $bob;
+        $this->dirk = $dirk;
 
         $this->_db = $db;
     }
@@ -113,7 +135,7 @@ class CW_SQLTest extends PHPUnit_Framework_TestCase
         // Simple SELECT firstname, lastname FROM people
         $people = CW_SQL::getInstance()->select(array('id','firstname', 'lastname'), 'people');
 
-        $this->assertEquals(3, sizeof($people), 'Incorrect number of rows returned');
+        $this->assertEquals(5, count($people), 'Incorrect number of rows returned');
 
         $fred = $people[0];
         $this->assertInstanceOf('stdClass', $fred, 'Rows should be objects');
@@ -142,7 +164,7 @@ class CW_SQLTest extends PHPUnit_Framework_TestCase
         // SELECT firstname FROM people LIMIT 1,3
         $lastTwoRows = CW_SQL::getInstance()->select(array('firstname'), 'people', null, null, array(1,3));
 
-        $this->assertEquals(2, sizeof($lastTwoRows));
+        $this->assertEquals(3, sizeof($lastTwoRows));
         $this->assertEquals($this->barney['firstname'], $lastTwoRows[0]->firstname, 'First row (2nd in DB) should be Barney');
     }
 
@@ -193,6 +215,8 @@ class CW_SQLTest extends PHPUnit_Framework_TestCase
         $this->assertObjectNotHasAttribute('firstname', $people[0], 'Firstname should not be present, just: id, lastname');
     }
 
+
+
     public function testSelectRow_successfulCase() {
         $this->markTestIncomplete('This test is not yet implemented');
         //TODO Test the method selectRow() that will return only one row (object)
@@ -204,7 +228,7 @@ class CW_SQLTest extends PHPUnit_Framework_TestCase
             array('firstname', 'lastname', 'age'), 'people', CW_SQL::NO_WHERE, CW_SQL::NO_LIMIT, CW_SQL::NO_ORDER, 'Person'
         );
 
-        $this->assertEquals(3, sizeof($people));
+        $this->assertEquals(5, sizeof($people));
 
         $fred = $people[0];
 
@@ -242,7 +266,7 @@ class CW_SQLTest extends PHPUnit_Framework_TestCase
 
     public function testSelect_withWhere() {
         // SELECT firstname FROM people WHERE firstname = 'Bob' /* 0 results - no user with name Bob */
-        $noPeople = CW_SQL::getInstance()->select(array('firstname'), 'people', array('firstname' => 'Bob'));
+        $noPeople = CW_SQL::getInstance()->select(array('firstname'), 'people', array('firstname' => 'Sadam'));
 
         $this->assertEquals(0, sizeof($noPeople));
 
@@ -254,8 +278,10 @@ class CW_SQLTest extends PHPUnit_Framework_TestCase
         // Numeric equality test SELECT * FROM people WHERE age > 11 /* 2 results: fred & Barney */
         $barneyOnly = CW_SQL::getInstance()->select(array('firstname'), 'people', array('age > ' => 11));
 
-        $this->assertEquals(2, sizeof($barneyOnly));
+        $this->assertEquals(4, sizeof($barneyOnly));
         $this->assertEquals('Barney', $barneyOnly[0]->firstname, 'Barney should be the only result returned');
+
+
 
         // SELECT firstname FROM people WHERE age < 20 AND createdDate > 2000-01-01
         $youngerUsers = CW_SQL::getInstance()->select(array('firstname'), 'people',
@@ -295,7 +321,9 @@ class CW_SQLTest extends PHPUnit_Framework_TestCase
         $this->assertInstanceOf('DateTime', $barneyAgain->createdDate, 'createddate is NOT an instance of DateTime');
         $this->assertEquals($this->barney['createdDate'], $barneyAgain->createdDate, 'createddate search (for Barney) failed');
 
-        $people = CW_SQL::getInstance()->select($allColumns, 'people', array('balance' => $this->fred['balance']));
+        $people = CW_SQL::getInstance()->select(
+            $allColumns, 'people', array('realBalance' => $this->fred['balance'])
+        );
         $this->assertEquals(1, sizeof($people), 'Balance search of 1.11 (for Fred) failed');
 
         $fredAgain = $people[0];
@@ -334,14 +362,31 @@ class CW_SQLTest extends PHPUnit_Framework_TestCase
         $this->markTestIncomplete('This test is not yet implemented');
     }
 
-    public function testSelect_withSort() {
+    public function testSelect_withSimpleSort() {
         // SELECT firstname FROM people ORDER BY age DESC
-        $aliceFirst = CW_SQL::getInstance()->select(array('firstname'), 'people', null, array('age' => 'DESC'));
+        $fredFirst = CW_SQL::getInstance()->select(array('firstname'), 'people', null, array('age' => 'ASC'));
 
-        $alice = $aliceFirst[0];
-        $this->assertEquals($this->alice['firstname'], $alice->firstname);
-        $barney = $aliceFirst [1];
+        $fred = $fredFirst[0];
+        $this->assertEquals($this->fred['firstname'], $fred->firstname);
+        $barney = $fredFirst [1];
         $this->assertEquals('Barney', $barney->firstname);
+
+        $oldestPerson = TestHelper::createTestUser('Oldest', 'Person', 99, '1910-10-10 10:10:10', 99.99);
+        $this->rawPersonInsert($this->_db, $oldestPerson);
+
+        $oldestFirst = CW_SQL::getInstance()->select(array('firstname'), 'people', null, array('age' => 'DESC'));
+
+        $oldestActual = $oldestFirst[0];
+        $this->assertEquals($oldestPerson['firstname'], $oldestActual->firstname);
+    }
+
+    public function testSelect_withTwoParamSort() {
+        $dirkFirst = CW_SQL::getInstance()->select(
+            array('firstname'), 'people', null, array('age' => 'DESC', 'firstname' => 'DESC')
+        );
+
+        $dirk = $dirkFirst[0];
+        $this->assertEquals($this->dirk['firstname'], $dirk->firstname);
     }
 
     public function testSelect_withDates() {
@@ -468,5 +513,19 @@ class Person {
 
     public function getLastname() {
         return $this->lastname;
+    }
+}
+
+class TestHelper {
+    public static function createTestUser($firstname, $lastname, $age, $createdDate, $balance) {
+        $person = array(
+            'firstname' => $firstname,
+            'lastname' => $lastname,
+            'age' => $age,
+            'createdDate' => new DateTime($createdDate),
+            'balance' => $balance,
+            'realBalance' => $balance
+        );
+        return $person;
     }
 }
