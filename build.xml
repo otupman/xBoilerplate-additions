@@ -101,7 +101,7 @@
     <!-- Generate API documentation -->
     <target name="phpdoc">
         <exec executable="phpdoc">
-            <arg line="run" />
+            <arg line="-d ${basedir}/lib --target ${basedir}/build/api"/>
         </exec>
     </target>
 
