@@ -5,7 +5,7 @@
  * Date: 21/05/2012
  * Time: 09:23
  */
-require_once('../bootstrap.php');
+
 class CW_SQLTest extends PHPUnit_Framework_TestCase
 {
     private $config;
