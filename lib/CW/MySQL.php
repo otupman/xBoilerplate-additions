@@ -120,19 +120,7 @@ class CW_MySQL extends CW_SQL
     }
 
     /**
-     * Performs a raw-query upon the database.
-     *
-     * This method gives you full control over your access to the database, however it is unprotected and not
-     * recommended for 80% of applications and queries.
-     *
-     * It is left to the calling code to ensure that the data in the query is safe to execute. In addition, this
-     * method does not return an array of results but the raw mysqli_result object.
-     *
-     * If you are a Centralwayer, prepare to justify your use of this method.
-     *
-     * @param string $query the query to execute
-     * @throws Exception in the event of any SQL exceptions occur
-     * @return PDOStatement
+     * See CW_SQL::query()
      */
     public function query($query) {
         try {
