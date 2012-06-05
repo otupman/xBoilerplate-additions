@@ -1,69 +1,62 @@
 <?php
 /**
- * CW_MySQL - Simplified database access class to provide quick, easy and secure queries.
+ * CW_MySQL - implementation of CW_SQL supporting multiple databases (via PDO).
  *
- * The MySQL class is intended to provide clients with a simplified set of SQL queries that should cover 80% of use
- * cases. It also provides more power via the query() method, where a custom query can be supplied - however, it is
- * expected that this method is only used as a last resort. For Centralwayers, using it will mean you're asked to
- * justify *why* you are using it!
- *
- * The standard SQL operations are available:
- *  select()
- *  update()
- *  insert()
- *
- * The following additional operations are available:
- *  selectRow() - selects a single row, returning the first result
- *
- * The following operations are *not* available:
- *  delete() - hard-deleting is not recommended, consider using a soft delete (i.e. a boolean column called isDeleted)
- *
- * More information can be found on github's wiki page here:
- *  https://github.com/centralway/xBoilerplate-additions/wiki/MySQL
+ * If you are looking to use SQL, please refer to the documentation on CW_SQL (SQL.php)
  *
  * @author Oliver Tupman <oliver.tupman@centralway.com>
- * @version 0.3-PDO
+ * @version 0.4
  *
  */
 
 class CW_MySQL extends CW_SQL
 {
-
-
+    /**
+     * @static
+     * @return CW_SQL
+     * @deprecated
+     */
     public static function getInstance() {
         return CW_SQL::getInstance();
     }
 
-    private static function checkCorrectVersion() {
-        //TODO Implement version check
-        phpversion();
-    }
-
-    /** Optionally used to signal an empty where clause */
+    /** Optionally used to signal an empty where clause
+     * @deprecated use the value on CW_SQL
+     */
     const NO_WHERE = CW_SQL::NO_WHERE;
-    /** Optionally used to signal an empty order instruction  */
+    /** Optionally used to signal an empty order instruction
+     * @deprecated use the value on CW_SQL  */
     const NO_ORDER = CW_SQL::NO_ORDER;
-    /** Optionally used to signal that there is no limit set on the query */
+    /** Optionally used to signal that there is no limit set on the query
+     * @deprecated use the value on CW_SQL */
     const NO_LIMIT = CW_SQL::NO_LIMIT;
-    /** The default class instantiated to return results with */
+    /** The default class instantiated to return results with
+     * @deprecated use the value on CW_SQL */
     const STANDARD_CLASS = CW_SQL::STANDARD_CLASS;
 
-    /** Sort operator: ascending */
+    /** Sort operator: ascending
+     * @deprecated use the value on CW_SQL */
     const OP_ASC = CW_SQL::OP_ASC;
-    /** Sort operator: descending */
+    /** Sort operator: descending
+     * @deprecated use the value on CW_SQL */
     const OP_DESC = CW_SQL::OP_DESC;
+
+
+    /** Configuration key: database driver */
+    const CONFIG_DRIVER = 'driver';
+
+    /** Configuration value: MySQL driver */
+    const DRIVER_MYSQL = 'mysql';
 
 
     /** The escape character to surround field names with */
     const STRING_ESCAPE = '`';
 
-    private static $VALID_OPERATORS = array(
-        '>', '<', '=', '!='
-    );
+    private $config = array();
 
     protected function __construct() {
-        $config = $this->loadConfig(xBoilerplate::getInstance());
-        $this->openConnection($config);
+        $this->config = $this->loadConfig(xBoilerplate::getInstance());
+        $this->openConnection($this->config);
     }
 
     /**
@@ -74,10 +67,10 @@ class CW_MySQL extends CW_SQL
      */
     protected function openConnection($config)
     {
-        //self::$_db = new mysqli($config->host, $config->username, $config->password, $config->schema);
-        $dsn = 'mysql:dbname=' . $config->schema . ';host=' . $config->host;
+        $dsn = 'mysql:dbname=' . $config['schema'] . ';host=' . $config['host'];
+        $pdoOptions = array(PDO::ATTR_PERSISTENT => true);
         try {
-            self::$_db = new PDO($dsn, $config->username, $config->password);
+            self::$_db = new PDO($dsn, $config['username'], $config['password'], $pdoOptions);
             self::$_db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         } catch (PDOException $ex) {
             throw new CW_SQLException('Error connecting to database: ' . $ex->getMessage(), 0, $ex);
@@ -99,8 +92,9 @@ class CW_MySQL extends CW_SQL
             throw new RuntimeException('Missing "db" property on configuration, have you setup it up correctly?');
         }
 
-        $config = (object)$xConfig->db;
+        $config = (array)$xConfig->db;
         $this->checkConfig($config);
+        $config[self::CONFIG_DRIVER] = self::DRIVER_MYSQL;
         return $config;
     }
 
@@ -139,7 +133,7 @@ class CW_MySQL extends CW_SQL
     }
 
     private static function createPdoException($message, PDOException $ex) {
-        return new Exception($message . $ex->getMessage(), 0, $ex);
+        return new CW_SQLException($message . $ex->getMessage(), 0, $ex);
     }
 
 
@@ -215,7 +209,6 @@ class CW_MySQL extends CW_SQL
     public function select(array $columns, $table, $where = self::NO_WHERE, $order = self::NO_ORDER, $limit = self::NO_LIMIT,
                            $className = self::STANDARD_CLASS)
     {
-        //$columnFragment = implode(', ', $columns);
         $columnFragment = $this->sqlImplode($columns);
         $containsSelectAsterisk = stripos($columnFragment, '*') !== false;
         if($containsSelectAsterisk) {
@@ -261,14 +254,6 @@ class CW_MySQL extends CW_SQL
             $index++;
         }
         return $statement;
-//        $values = array();
-//        foreach ($whereClause->getValues() as $value) {
-//            $values[] = &$value;
-//        }
-//        $typeList = $whereClause->getTypeList();
-//        $functionParams = array_merge(array(&$typeList), $values);
-//
-//        call_user_func_array(array($statement, 'bind_param'), $functionParams);
     }
 
     /**
@@ -447,34 +432,19 @@ class CW_MySQL extends CW_SQL
 
     const TYPECODE_DATETIME = 12;
 
+    /** MySQL-specific DATETIME type name */
+    const _MYSQL_TYPE_DATETIME = 'DATETIME';
+
     /**
      * Determines if the type code supplied is for a datetime or not
      *
      * @param integer $fieldTypeCode the code from a fetch_field_direct call
      * @return bool true if the code is for a DATETIME; otherwise false
      */
-    private function isDateField($fieldTypeCode) {
-        // Keeping this code/type map for future reference as we'll probably want to implement better conversion
-//        $mysqlFieldTypeMap = array(
-//            1=>'tinyint',
-//            2=>'smallint',
-//            3=>'int',
-//            4=>'float',
-//            5=>'double',
-//            7=>'timestamp',
-//            8=>'bigint',
-//            9=>'mediumint',
-//            10=>'date',
-//            11=>'time',
-//            12=>'datetime',
-//            13=>'year',
-//            16=>'bit',
-//            //252 is currently mapped to all text and blob types (MySQL 5.0.51a)
-//            253=>'varchar',
-//            254=>'char',
-//            246=>'decimal'
-//        );
-        return $fieldTypeCode == self::TYPECODE_DATETIME;
+    private function isDateField($nativeTypename, $config) {
+        if($config[self::CONFIG_DRIVER] == self::DRIVER_MYSQL) {
+            return $nativeTypename == self::_MYSQL_TYPE_DATETIME;
+        }
     }
 
     /**
@@ -487,27 +457,24 @@ class CW_MySQL extends CW_SQL
      */
     private function _buildResults(PDOStatement $result, $className)
     {
-//        $dateFieldNames = array();
-//        for($i = 0; $i < $result->field_count; $i++) {
-//            $fieldMetadata = $result->fetch_field_direct($i);
-//            if($fieldMetadata !== false) {
-//                PDO::PARAM
-//                if($this->isDateField($fieldMetadata->type)) {
-//                    $dateFieldNames[] = $fieldMetadata->name;
-//                }
-//            }
-//        }
-
+        $dateFieldNames = array();
+        for($i = 0; $i < $result->columnCount(); $i++) {
+            //$fieldMetadata = $result->fetch_field_direct($i);
+            $fieldMetadata = $result->getColumnMeta($i);
+            $columnNativeTypeName = $fieldMetadata['native_type'];
+            if($this->isDateField($columnNativeTypeName, $this->config)) {
+                $dateFieldNames[] = $fieldMetadata['name'];
+            }
+        }
         $results = array();
         while (($row = $result->fetchObject($className)) !== false) {
-//            $row = (array)$row;
-//            foreach($dateFieldNames as $fieldName) {
-//                try {
-//                    $row->$fieldName = new DateTime($row->$fieldName);
-//                } catch(Exception $ex) {
-//                    throw new CW_SQLException('Error parsing DateTime - ' . $ex->getMessage() . ' - and the value was: [' . $row->$fieldName . '] on column [' . $fieldName . ']');
-//                }
-//            }
+            foreach($dateFieldNames as $fieldName) {
+                try {
+                    $row->$fieldName = new DateTime($row->$fieldName);
+                } catch(Exception $ex) {
+                    throw new CW_SQLException('Error parsing DateTime - ' . $ex->getMessage() . ' - and the value was: [' . $row->$fieldName . '] on column [' . $fieldName . ']');
+                }
+            }
 
             $results[] = $row;
         }
@@ -599,7 +566,7 @@ class CW_MySQL extends CW_SQL
     }
 
     public function delete($table, $where) {
-        throw new  Exception("database successfully deleted");
+        throw new  Exception("Unsupported operation: please consider implementing soft-delete.");
     }
 
     public function update($table, array $data, array $where) {

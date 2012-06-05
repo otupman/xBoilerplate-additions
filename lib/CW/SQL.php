@@ -1,14 +1,35 @@
 <?php
 /**
+ * CW_SQL - Simplified database access class to provide quick, easy and secure queries.
+ *
+ * The SQL class is intended to provide clients with a simplified set of SQL queries that should cover 80% of use
+ * cases. It also provides more power via the query() method, where a custom query can be supplied - however, it is
+ * expected that this method is only used as a last resort. For Centralwayers, using it will mean you're asked to
+ * justify *why* you are using it!
+ *
+ * This class in particular - SQL.php - defines the API for database access; another class will implement this on
+ * CW_SQL's behalf. The default implementation is database-independent.
+ *
+ * The standard SQL operations are available:
+ *  select()
+ *  update()
+ *  insert()
+ *
+ * The following additional operations are available:
+ *  selectRow() - selects a single row, returning the first result
+ *
+ * The following operations are *not* available:
+ *  delete() - hard-deleting is not recommended, consider using a soft delete (i.e. a boolean column called isDeleted)
+ *
+ * More information can be found on github's wiki page here:
+ *  https://github.com/centralway/xBoilerplate-additions/wiki/SQL
+ *
  * @author Oliver Tupman <oliver.tupman@centralway.com>
- * Date: 05/06/2012
- * Time: 10:10
+ * @version 0.4
+ *
  */
 abstract class CW_SQL
 {
-
-
-
     /** Optionally used to signal an empty where clause */
     const NO_WHERE = null;
     /** Optionally used to signal an empty order instruction  */

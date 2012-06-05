@@ -1,7 +1,7 @@
 <?php
 /**
  * @author Oliver Tupman <oliver.tupman@centralway.com>
- * @version 0.1
+ * @version 0.4
  * Date: 21/05/2012
  * Time: 09:23
  */
@@ -292,8 +292,8 @@ class CW_SQLTest extends PHPUnit_Framework_TestCase
         $this->assertEquals(1, sizeof($people), 'Date search (for Barney) failed');
 
         $barneyAgain = $people[0];
-//        $this->assertInstanceOf('DateTime', $barneyAgain->createdDate, 'createddate is NOT an instance of DateTime');
-        $this->assertEquals($this->barney['createdDate']->format('Y-m-d H:i:s'), $barneyAgain->createdDate, 'createddate search (for Barney) failed');
+        $this->assertInstanceOf('DateTime', $barneyAgain->createdDate, 'createddate is NOT an instance of DateTime');
+        $this->assertEquals($this->barney['createdDate'], $barneyAgain->createdDate, 'createddate search (for Barney) failed');
 
         $people = CW_SQL::getInstance()->select($allColumns, 'people', array('balance' => $this->fred['balance']));
         $this->assertEquals(1, sizeof($people), 'Balance search of 1.11 (for Fred) failed');
@@ -367,6 +367,7 @@ class CW_SQLTest extends PHPUnit_Framework_TestCase
         $this->assertEquals($firstname, $testUser->firstname, 'First name does not match');
         $this->assertEquals($age, $testUser->age, 'Age does not match');
         $this->assertEquals($lastname, $testUser->lastname, 'Lastname does not match');
+        // ::query() does not return date/time objects (intentionally), so we must manually create it here
         $this->assertEquals($createdDate, new DateTime($testUser->createdDate), 'Created Date does not match');
 
         $testUser = CW_SQL::getInstance()->selectRow(array('firstname', 'lastname', 'age', 'createdDate'), 'people', array('age' => $age));
@@ -374,7 +375,7 @@ class CW_SQLTest extends PHPUnit_Framework_TestCase
         $this->assertEquals($firstname, $testUser->firstname, 'From selectRow(): First name does not match');
         $this->assertEquals($age, $testUser->age, 'From selectRow(): Age does not match');
         $this->assertEquals($lastname, $testUser->lastname, 'From selectRow(): Lastname does not match');
-        $this->assertEquals($createdDate, new DateTime($testUser->createdDate), 'From selectRow(): Created date does not match');
+        $this->assertEquals($createdDate, $testUser->createdDate, 'From selectRow(): Created date does not match');
 
     }
 
