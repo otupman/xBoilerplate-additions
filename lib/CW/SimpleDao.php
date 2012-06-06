@@ -11,16 +11,41 @@ class CW_SimpleDao
     private $_tableName;
     private $_fields;
 
+    private $_reflectionInfo;
+
     /**
      * @param string $objectType class name of the object
      * @param array $fields the list of fields that belong to the object
      * @param string $tableName the name of the table that holds the object
      */
     public function __construct($objectType, array $fields, $tableName) {
+        $this->_reflectionInfo = new ReflectionClass($objectType);
+        if(!$this->_reflectionInfo->isInstantiable()) {
+            throw new RuntimeException('Cannot create a DAO on a non-instantiable class (' . $objectType . ')');
+        }
+
         $this->_objectType = $objectType;
         $this->_db = CW_SQL::getInstance();
         $this->_tableName = $tableName;
         $this->_fields = $fields;
+
+    }
+
+    private function _obtainSetters(ReflectionClass $reflectionInfo) {
+        $publicMethods = $reflectionInfo->getMethods(ReflectionMethod::IS_PUBLIC);
+        $setters = array();
+
+        foreach($publicMethods as $publicMethod) {
+            $isGetter = stripos($publicMethod->getName(), 'get') == 0;
+            if($isGetter) {
+                $setters[] = $publicMethod;
+            }
+        }
+        return $setters;
+    }
+
+    private function inflateFromObject($dbSource, $setters, $target) {
+
     }
 
     /**
@@ -29,10 +54,13 @@ class CW_SimpleDao
      * @throws Exception in the event that no such object with that ID exists
      */
     public function loadById($ids) {
-        $results = $this->_db->select($this->_fields, $this->_tableName, $ids, CW_SQL::NO_ORDER, 1, $this->_objectType);
+        $results = $this->_db->select($this->_fields, $this->_tableName, $ids, CW_SQL::NO_ORDER, 1);
         if(sizeof($results) != 1) {
             throw new Exception('Could not find an object');
         }
+        $returnObject = new $this->_objectType();
+
+        $returnObject = $this->inflateFromObject($results)
         return $results[0];
     }
 
