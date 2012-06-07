@@ -294,7 +294,6 @@ class CW_MySQLTest extends PHPUnit_Framework_TestCase
     }
 
     public function testUpdate_badParameters() {
-        $this->markTestIncomplete('This test is not yet implemented');
         try {
             CW_MySQL::getInstance()->update('people', array('firstname' => 'Fred'), null);
             $this->fail('Expected exception when using null where clause');
