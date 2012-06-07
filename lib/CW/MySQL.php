@@ -1,88 +1,205 @@
 <?php
 /**
- * CW_MySQL - Simplified database access class to provide quick, easy and secure queries.
+ * CW_MySQL - implementation of CW_SQL supporting multiple databases (via PDO).
  *
- * The MySQL class is intended to provide clients with a simplified set of SQL queries that should cover 80% of use
- * cases. It also provides more power via the query() method, where a custom query can be supplied - however, it is
- * expected that this method is only used as a last resort. For Centralwayers, using it will mean you're asked to
- * justify *why* you are using it!
- *
- * The standard SQL operations are available:
- *  select()
- *  update()
- *  insert()
- *
- * The following additional operations are available:
- *  selectRow() - selects a single row, returning the first result
- *
- * The following operations are *not* available:
- *  delete() - hard-deleting is not recommended, consider using a soft delete (i.e. a boolean column called isDeleted)
- *
- * More information can be found on github's wiki
+ * If you are looking to use SQL, please refer to the documentation on CW_SQL (SQL.php)
  *
  * @author Oliver Tupman <oliver.tupman@centralway.com>
- * @version 0.1
+ * @version 0.4
  *
  */
 
-class CW_MySQL
+class CW_MySQL extends CW_SQL
 {
-    //TODO: currently all exceptions are Exception; need to create a MySQLException class once all error scenarios are found
-
-    protected static $_object = null;
-    protected static $_db = null;
-
-    protected function __construct() {
-        //$config = xBoilerplate::getConfig()->db;
-        //self::$_db = new mysqli($config['host'], $config['username'], $config['password'], $config['db']);
-        self::$_db = new mysqli('localhost', 'root', '', 'xBoilerplate_additions');
-    }
-
     /**
-     * @param string $query
-     * @return mysqli_result
-     */
-    public function query($query) {
-        return self::$_db->query($query);
-    }
-
-    /**
-     * @return CW_MySQL
+     * @static
+     * @return CW_SQL
+     * @deprecated
      */
     public static function getInstance() {
-        if (!self::$_object) {
-            self::$_object = new self();
-        }
-        return self::$_object;
+        return CW_SQL::getInstance();
     }
-    const NO_WHERE = null;
-    const NO_ORDER = null;
-    const NO_LIMIT = null;
-    const NO_OBJECT = 'stdClass';
 
-    private static $VALID_OPERATORS = array(
-        '>', '<', '=', '!='
-    );
+    /** Optionally used to signal an empty where clause
+     * @deprecated use the value on CW_SQL
+     */
+    const NO_WHERE = CW_SQL::NO_WHERE;
+    /** Optionally used to signal an empty order instruction
+     * @deprecated use the value on CW_SQL  */
+    const NO_ORDER = CW_SQL::NO_ORDER;
+    /** Optionally used to signal that there is no limit set on the query
+     * @deprecated use the value on CW_SQL */
+    const NO_LIMIT = CW_SQL::NO_LIMIT;
+    /** The default class instantiated to return results with
+     * @deprecated use the value on CW_SQL */
+    const STANDARD_CLASS = CW_SQL::STANDARD_CLASS;
 
-    protected function createParameters($where) {
+    /** Sort operator: ascending
+     * @deprecated use the value on CW_SQL */
+    const OP_ASC = CW_SQL::OP_ASC;
+    /** Sort operator: descending
+     * @deprecated use the value on CW_SQL */
+    const OP_DESC = CW_SQL::OP_DESC;
+
+
+    /** Configuration key: database driver */
+    const CONFIG_DRIVER = 'driver';
+
+    /** Configuration value: MySQL driver */
+    const DRIVER_MYSQL = 'mysql';
+
+
+    /** The escape character to surround field names with */
+    const STRING_ESCAPE = '`';
+
+    private $config = array();
+
+    protected function __construct() {
+        $this->config = $this->loadConfig(xBoilerplate::getInstance());
+        $this->openConnection($this->config);
+    }
+
+    /**
+     * Opens the connection the MySQL server using the supplied configuration
+     *
+     * @param object $config the database configuration
+     * @throws Exception in the event that there is an issue connecting to the database
+     */
+    protected function openConnection($config)
+    {
+        $dsn = 'mysql:dbname=' . $config['schema'] . ';host=' . $config['host'];
+        $pdoOptions = array(PDO::ATTR_PERSISTENT => true);
+        try {
+            self::$_db = new PDO($dsn, $config['username'], $config['password'], $pdoOptions);
+            self::$_db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        } catch (PDOException $ex) {
+            throw new CW_SQLException('Error connecting to database: ' . $ex->getMessage(), 0, $ex);
+        }
+    }
+
+    /**
+     * Loads the configuration from xBoilerplate
+     *
+     * @param xBoilerplate $xBoilerplate the xBoilerplate instance
+     * @return array|associative configuration entry for database details
+     * @throws RuntimeException in the event that there is no 'db' property on the xBoilerplate configuration
+     */
+    protected function loadConfig(xBoilerplate $xBoilerplate)
+    {
+        $xConfig = $xBoilerplate->getConfig();
+
+        if (!array_key_exists('db', $xConfig)) {
+            throw new RuntimeException('Missing "db" property on configuration, have you setup it up correctly?');
+        }
+
+        $config = $xConfig->db;
+        $this->checkConfig($config);
+
+        $config = $this->setConfigOption((array)$config, CW_SQL::CONFIG_DEBUG, CW_SQL::DEBUG_NONE);
+        $config = $this->setConfigOption((array)$config, self::CONFIG_DRIVER, self::DRIVER_MYSQL);
+
+        return $config;
+    }
+
+
+    private function setConfigOption(array $config, $keyName, $default = null) {
+        $config[$keyName] = (array_key_exists($keyName, $config)) ? $config[$keyName] : $default;
+        return $config;
+    }
+
+    /**
+     * Checks the supplied configuration for any missing config settings and throws an exception if any are found
+     *
+     * @param array|associative $dbConfig db configuration array
+     * @throws RuntimeException if any required config key is not found
+     */
+    private function checkConfig($dbConfig) {
+        $requiredKeys = array('username', 'password', 'host', 'schema');
+        foreach($requiredKeys as $configKey) {
+            if(!array_key_exists($configKey, $dbConfig)) {
+                throw new RuntimeException('Required configuration key ' . $configKey . ' is not present on your db configuration');
+            }
+        }
+    }
+
+    /**
+     * See CW_SQL::query()
+     */
+    public function query($query) {
+        try {
+            $statement = self::$_db->prepare($query);
+        } catch(PDOException $ex) {
+            throw self::createPdoException('Error preparing query ', $ex);
+        }
+
+        try {
+            $statement->execute();
+        } catch(PDOException $ex) {
+            throw self::createPdoException('Error executing query', $ex);
+        }
+
+        return $statement;
+    }
+
+    private static function createPdoException($message, PDOException $ex) {
+        return new CW_SQLException($message . $ex->getMessage(), 0, $ex);
+    }
+
+
+    /**
+     * Builds the PrivateQueryParameters for the supplied associative array
+     *
+     * This takes a query parameter array and converts it into the set of 3
+     * arrays.
+     *
+     * Incoming data is an associative array with key: column name, value: field value
+     *
+     * This method also determines the target type of the field based on the type of the
+     * value passed in for each field.
+     *
+     * @param array|\associative $parameterArray associative array of parameters
+     * @return PrivateQueryParameters
+     */
+    protected function createParameters(array $parameterArray) {
         $whereClause = new PrivateQueryParameters();
-        if($where == self::NO_WHERE) {
+        if($parameterArray == self::NO_WHERE) {
             return $whereClause; // Early exit if no where clause
         }
 
-        foreach($where as $columnName => $columnValue) {
-            $name = trim($columnName);
-            $needsEquals = stripos($name, ' ') === false;
-            if($needsEquals) {
-                $name .= ' =';
-            }
-            $name .= ' ? ';
+        foreach($parameterArray as $columnName => $columnValue) {
+            $name = $this->buildCondition($columnName);
             $targetType = $this->getType($columnValue);
             $value = $this->convertValue($columnValue, $targetType);
             $whereClause->addClause($name, $targetType, $value);
         }
 
         return $whereClause;
+    }
+
+    /**
+     * Takes a raw condition passed in from the client and converts it to a valid conditional to go into the SQL
+     * clause.
+     *
+     * Examples:
+     * array('firstname' => 'someValue') - turns into `firstname` = ?
+     * array('firstname >' => 'otherValue') - `firstname` > ?
+     *
+     * @param string $rawCondition string the raw condition passed in by the client
+     * @return string the fully-built condition ready for SQL
+     */
+    protected function buildCondition($rawCondition) {
+        $rawCondition = trim($rawCondition);
+        $operator = '=';
+        $columnName = $rawCondition;
+        if(stripos($rawCondition, ' ') !== false) {
+            $splitCondition = mb_split(' ', $rawCondition);
+            $columnName = $splitCondition[0];
+            $operator = $splitCondition[1];
+        }
+        else {
+            // Will use defaults for $columnName and $operator
+        }
+        return self::escapeFieldName($columnName) . ' ' . $operator . ' ?';
     }
 
     //TODO: This needs to handle type hinting
@@ -96,106 +213,157 @@ class CW_MySQL
     }
 
     /**
-     * Selects data from the specified table, always returning an array of the retrieve results.
-     *
-     * By default this method will return an array of objects of type stdClass; each object will
-     * have a property based on the column names returned as part of the column list.
-     *
-     * All results are retrieved in one call, therefore it is the responsibility of the caller to
-     * perform any necessary limiting (either by limiting or by filtering with a where clause).
-     *
-     * Simple call - no where, order or limit:
-     * SELECT firstname, lastname FROM people;
-     * ->  select(array('firstname', 'lastname'), 'people');
-     *
-     * Note: SELECT * is not permitted; it will thrown an exception. You *must* specify the columns
-     * you wish to retrieve.
-     *
-     * Filtering call - where with simple implicit 'equals' operators
-     *
-     * If you are performing a simple where with just equals operators (i.e. ID = 2) then you can
-     * simply pass in the column name as the key for each part of the where clause:
-     *
-     * SELECT firstname, lastname FROM people WHERE firstname = 'fred';
-     * ->  select(array('firstname', 'lastname'), 'people', array('firstname' => 'fred'));
-     *
-     * Filtering call - where with operators
-     *
-     * To perform a more complex query with operators (greater than >, not equal to !=) you must pass
-     * them in as part of the key of the where clause.
-     *
-     * SELECT firstname, age FROM people WHERE age > 11;
-     * -> select(array('firstname', 'lastname'), 'people', array('age >' => 11));
-     *
-     * Ordered call - SORT BY firstname
-     *
-     * SELECT firstname, lastname FROM people SORT BY firstname ASC
-     * -> select(array('firstname', 'lastname'), 'people', null, array('firstname' => 'ASC'));
-     *
-     * Limited call - LIMIT 1, 10
-     *
-     * SELECT firstname FROM people LIMIT 1;
-     * -> select(array('firstname'), 'people', null, null, 1);
-     *
-     * SELECT firstname FROM people LIMIT 10, 20;
-     * -> select(array('firstname'), 'people', null, null, array(10, 20));
-     *
-     * Custom objects - have the select() function return custom objects instead of stdClass
-     *
-     * By default the select() method returns an array of stdClass instances. Pass in a class name
-     * and the method will instantiate that class and assign the values to that instead.
-     *
-     * $people = select(array('firstname', 'lastname'), 'people', null, null, null, 'person');
-     *
-     *
-     * @param $columns the columns to retrieve data from
-     * @param $table the table to retrieve the data from
-     * @param array $where optional; where clause with which to filter data, key: column name, value: value
-     * @param array $order optional; associative array of fields to order by and in which direction
-     * @param array $limit optional; pass in a integer to limit TO, pass in an 2-element array to limit FROM and TO
-     * @param string $className; optional, pass in a class name for the function to instantiate
-     * @throws Exception in the event of an issue TODO: issue-specific exceptions
-     * @return array of objects found; each object will be of stdClass unless $className is passed
+     * See CW_SQL::select()
      */
-    public function select($columns, $table, $where = self::NO_WHERE, $order = self::NO_ORDER, $limit = self::NO_LIMIT,
-                           $className = self::NO_OBJECT)
+    public function select(array $columns, $table, $where = self::NO_WHERE, $order = self::NO_ORDER, $limit = self::NO_LIMIT,
+                           $className = self::STANDARD_CLASS)
     {
-        $columnFragment = implode(', ', $columns);
+        $columnFragment = $this->sqlImplode($columns);
         $containsSelectAsterisk = stripos($columnFragment, '*') !== false;
         if($containsSelectAsterisk) {
-            throw new Exception('Select * is not allowed');
+            throw new CW_SQLException('Select * is not allowed');
         }
 
-        $whereClause = $this->createParameters($where);
+        $whereClause = $this->createParameters($where != null ? $where : array());
+        $orderClauses = $this->buildOrderClauses($order != null ? $order : array());
 
         $query = 'SELECT ' . $columnFragment . ' ';
         $query.= 'FROM ' . $table . ' ';
         $query.= $this->generateWhere($whereClause, $query);
 
-        $statement = self::$_db->prepare($query);
-        if($statement === false) {
-            throw self::createQueryException('Could not prepare query', self::$_db, $query);
+        if(sizeof($orderClauses) > 0) {
+            $query.= ' ORDER BY ' . implode(', ', $orderClauses);
+        }
+        if($limit != null) {
+            $query.= ' LIMIT ' . $this->createLimitSql($limit);
+        }
+
+        try {
+            $statement = self::$_db->prepare($query);
+        } catch(PDOException $ex) {
+            throw self::createPdoException('Could not prepare query', $ex);
         }
 
 
         if(!$whereClause->isEmpty()) {
-            $values = array();
-            foreach($whereClause->getValues() as $value) {
-                $values[] = &$value;
-            }
-            $typeList = $whereClause->getTypeList();
-            $functionParams = array_merge(array(&$typeList), $values);
+            $this->bindQueryParameters($whereClause->getValues(), $statement);
+        }
+//        $statement->debugDumpParams();
+//        echo "Query parameters: ";
+//        var_dump($where);
+//        echo "\n";
+        return $this->executeSelectStatement($statement, $query, $className);
+    }
 
-            call_user_func_array(array($statement, 'bind_param'), $functionParams);
+    protected function bindQueryParameters(array $whereValues, PDOStatement $statement)
+    {
+        $index = 1;
+        foreach($whereValues as &$value) {
+            $valueType = $this->getType($value);
+            $value = $this->convertValue($value, $valueType);
+
+            $statement->bindParam($index, $value, $valueType);
+            $index++;
+        }
+        return $statement;
+    }
+
+    /**
+     * Escapes a field name with the appropriate escape characters in order to prevent keyword issues
+     *
+     * @static
+     * @param string $fieldName the field name to escape
+     * @return string the properly escaped fieldname
+     */
+    public static function escapeFieldName($fieldName) {
+        return self::STRING_ESCAPE . $fieldName . self::STRING_ESCAPE;
+    }
+
+    /**
+     * Implodes a series of column names in an SQL-compatible fashion, preventing any issues with reserved words
+     *
+     * @param array $items an array of column names
+     * @param string $glue optional; glue to stick the elements together
+     * @return string the imploded array
+     */
+    private function sqlImplode(array $items, $glue = ', ') {
+        $implodedData = '';
+        foreach($items as $item) {
+            if(strlen($implodedData) > 0) {
+                $implodedData.= $glue;
+            }
+            $implodedData .= self::escapeFieldName($item);
+        }
+        return $implodedData;
+    }
+
+    /**
+     * Builds the order clauses from the incoming data, if any are present
+     *
+     * @param array $order the order to build from
+     * @return array containing the build SQL order clauses
+     * @throws InvalidArgumentException in the event that any of the incoming data is invalid (i.e. ASK instead of ASC)
+     */
+    private function buildOrderClauses($order)
+    {
+        $orderClauses = array();
+
+        if ($order != null) {
+            array_walk($order, function($val, $key) use (&$orderClauses)
+            {
+                $val = strtoupper(trim($val));
+                if ($val != CW_MySQL::OP_ASC && $val != CW_MySQL::OP_DESC) {
+                    throw new InvalidArgumentException('Order must either be ASC or DESC. Order column: ' . $key);
+                }
+                $orderClauses[] = CW_MySQL::escapeFieldName($key) . ' ' . $val;
+            });
+            return $orderClauses;
+        }
+        return $orderClauses;
+    }
+
+    /**
+     * See CW_SQL::selectRow()
+     */
+    public function selectRow(array $columns, $table, array $where, $className = self::STANDARD_CLASS) {
+        if(sizeof($where) == 0) {
+            throw new InvalidArgumentException('Where clause cannot be an empty array');
         }
 
-        return $this->executeSelectStatement($statement, $query, $className);
+        $resultArray = $this->select($columns, $table, $where, self::NO_ORDER, 1);
+        if(sizeof($resultArray) > 0) {
+            return $resultArray[0];
+        }
+        else {
+            return null;
+        }
+    }
+
+    /**
+     * Creates the SQL for the parameters to a LIMIT clause
+     *
+     * @param mixed $limit the incoming limit arguments
+     * @return string the string ready to be appended to a LIMIT clause
+     * @throws InvalidArgumentException in the event that the incoming limit arguments are not correct
+     */
+    private function createLimitSql($limit)
+    {
+        if (is_numeric($limit)) {
+            $limitValue = $limit;
+        }
+        else if (is_array($limit) && sizeof($limit) == 2) {
+            $limitValue = $limit[0] . ',' . $limit[1];
+        }
+        else {
+            throw new InvalidArgumentException('Limit must either be a single numeric, or a 2-element array of integers');
+        }
+        return $limitValue;
     }
 
     /**
      * Generates a 'WHERE x,y,z' clause
      *
-     * @param $whereClause there where parameters
+     * @param PrivateQueryParameters $whereClause there where parameters
      * @return string the string of the where clause, if parameters are present; otherwise, a empty string
      */
     private function generateWhere($whereClause)
@@ -214,79 +382,148 @@ class CW_MySQL
      *
      * This method can be overridden by deriving classes to provide custom-type handling
      *
-     * @param $value the value to get the type of; must be an object
-     * @param $typeHint the hint TODO: really needed?
+     * @param object $value the value to get the type of; must be an object
+     * @param mixed $typeHint the hint TODO: really needed?
      * @return string the single-character type value for the object
      * @throws Exception if the type of the value is not supported
      */
     protected function getObjectType($value, $typeHint) {
         if($value instanceof DateTime) {
-            return 's';
+            return PDO::PARAM_STR;
         }
         else {
-            throw new Exception('Unsupported type of ' . get_class($value));
+            throw new CW_SQLException('Unsupported type of ' . get_class($value));
         }
     }
 
     /**
      * Obtains the mysqli type character for the supplied value, using any hinting provided
      *
-     * @param $value the value to get the type of
+     * @param mixed $value the value to get the type of
      * @param string $typeHint name of the type that the value is
      * @return string the single character representation of the type
      * @throws Exception in the event the type of the value is unsupported
      */
-    private function getType($value, $typeHint = null) {
+    protected function getType($value, $typeHint = null) {
         switch(gettype($value)) {
             case 'integer':
-                return 'i';
+                return PDO::PARAM_INT;
             case 'double':
-                return 'd';
+                return PDO::PARAM_INT;
             case 'string':
-                return 's';
+                return PDO::PARAM_STR;
             case 'object':
                 return $this->getObjectType($value, $typeHint);
             default:
-                throw new Exception('Unsupported type: ' . gettype($value));
+                throw new CW_SQLException('Unsupported type: ' . gettype($value));
         }
     }
 
     /**
      * executes the statement of the supplied query, retriving rows with the class name
      *
-     * @param mysqli_stmt $statement
-     * @param $query
-     * @param $className
+     * @param PDOStatement $statement
+     * @param string $query
+     * @param string $className
      * @return array
      * @throws Exception
      */
-    private function executeSelectStatement(mysqli_stmt $statement, $query, $className)
+    private function executeSelectStatement(PDOStatement $statement, $query, $className)
     {
-        if (!$statement->execute()) {
-            throw self::createQueryException('Error executing query', $statement, $query);
-        }
-
-        $result = $statement->get_result();
-        if ($result === false) {
-            throw self::createQueryException('Error getting results', $statement, $query);
-        }
-        $results = array();
-        while(($row = $result->fetch_object($className)) != null) {
-            $results[] = $row;
-        }
-        $statement->close();
-
+        $this->executeStatement($statement);
+        $results = $this->_buildResults($statement, $className);
         return $results;
     }
+
+    private function logQuery(PDOStatement $statement) {
+        $debugOption = $this->config[CW_SQL::CONFIG_DEBUG];
+        if($debugOption == CW_SQL::DEBUG_NONE) {
+            return;
+        }
+
+        ob_start();
+        $statement->debugDumpParams();
+        $statementDebugInfo = ob_get_clean();
+
+        switch($debugOption) {
+            case CW_SQL::DEBUG_LOG:
+                user_error('Query executed; info: ' . $statementDebugInfo, E_USER_NOTICE);
+                break;
+            case CW_SQL::DEBUG_STORELAST:
+                $this->lastQuery = $statementDebugInfo;
+                break;
+        }
+    }
+
+    private function executeStatement(PDOStatement $statement) {
+        try {
+            $this->logQuery($statement);
+            $statement->execute();
+        } catch(PDOException $ex) {
+            throw self::createPdoException('Error executing query', $ex);
+        }
+    }
+
+    const TYPECODE_DATETIME = 12;
+
+    /** MySQL-specific DATETIME type name */
+    const _MYSQL_TYPE_DATETIME = 'DATETIME';
+
+    /**
+     * Determines if the type code supplied is for a datetime or not
+     *
+     * @param integer $fieldTypeCode the code from a fetch_field_direct call
+     * @return bool true if the code is for a DATETIME; otherwise false
+     */
+    private function isDateField($nativeTypename, $config) {
+        if($config[self::CONFIG_DRIVER] == self::DRIVER_MYSQL) {
+            return $nativeTypename == self::_MYSQL_TYPE_DATETIME;
+        }
+    }
+
+    /**
+     * Builds the result array from a result, performing any required output type conversion (i.e. DATETIME=>DateTime)
+     *
+     * @param mysqli_result $result the result
+     * @param string $className the name of the class to instantiate when fetching
+     * @return array array of fetched results
+     * @throws Exception in the event there is a problem converting a type
+     */
+    private function _buildResults(PDOStatement $result, $className)
+    {
+        $dateFieldNames = array();
+        for($i = 0; $i < $result->columnCount(); $i++) {
+            //$fieldMetadata = $result->fetch_field_direct($i);
+            $fieldMetadata = $result->getColumnMeta($i);
+            $columnNativeTypeName = $fieldMetadata['native_type'];
+            if($this->isDateField($columnNativeTypeName, $this->config)) {
+                $dateFieldNames[] = $fieldMetadata['name'];
+            }
+        }
+        $results = array();
+        while (($row = $result->fetchObject($className)) !== false) {
+            foreach($dateFieldNames as $fieldName) {
+                try {
+                    $row->$fieldName = new DateTime($row->$fieldName);
+                } catch(Exception $ex) {
+                    throw new CW_SQLException('Error parsing DateTime - ' . $ex->getMessage() . ' - and the value was: [' . $row->$fieldName . '] on column [' . $fieldName . ']');
+                }
+            }
+
+            $results[] = $row;
+        }
+        return $results;
+    }
+
 
     /**
      * Simple function that creates an instance of an exception with a message and adds the relevant mysqli error to it
      *
      *
      * @static
-     * @param $message the message to be reported
-     * @param $dbObject the mysqli object that experienced the error
-     * @param $query the query that was/should be executed
+     * @param string $message the message to be reported
+     * @param mysqli $dbObject the mysqli object that experienced the error
+     * @param string $query the query that was/should be executed
      * @return Exception the exception, ready for throwing
      */
     protected static function createQueryException($message, $dbObject, $query) {
@@ -295,7 +532,7 @@ class CW_MySQL
             . ' for query: '
             . $query);
     }
-    private function _createValues($numberOfValues) {
+    private function _createPlaceholders($numberOfValues) {
         $values = '';
 
         for($i=1; $i <= $numberOfValues; $i++) {
@@ -320,61 +557,46 @@ class CW_MySQL
 
     public function insert($table, array $data) {
         //create prepare statement, etc. INSERT INTO `people` (`firstname`, `lastname`, `age`, `createdDate`) VALUES (?, ?, ?, ?)
+        $columnNames = $this->buildInsertColumns($data);
+        $parameterPlaceholders = $this->_createPlaceholders(count($data));
+
+        $query = 'INSERT INTO `'.$table.'` ' .$columnNames;
+        $query.= ' VALUES ('.$parameterPlaceholders.')';
+
+        $statement = $this->prepareQuery($query);
+
+        $whereClause = $this->createParameters($data);
+
+        $this->bindQueryParameters($whereClause->getValues(), $statement);
+
+        $this->executeStatement($statement);
+        return self::$_db->lastInsertId();
+    }
+
+    private function prepareQuery($query)
+    {
+        try {
+            $statement = self::$_db->prepare($query);
+            return $statement;
+        } catch (PDOException $ex) {
+            throw self::createPdoException('Could not prepare query', $ex);
+        }
+    }
+
+    private function buildInsertColumns($data)
+    {
         $keys = array_keys($data);
         $dbColumnName = '(';
-        foreach($keys as $key) {
-            $dbColumnName .= '`'.$key.'`, ';
+        foreach ($keys as $key) {
+            $dbColumnName .= '`' . $key . '`, ';
         }
         $dbColumnName = substr($dbColumnName, 0, -2);
         $dbColumnName .= ')';
-
-        $table = 'INSERT INTO `'.$table.'` ' .$dbColumnName;
-
-        $numberOfValues = count($data);
-        $values = $this->_createValues($numberOfValues);
-
-        $dataType = $this->_checkTypeOfValues($data);
-        $type = '';
-        //getting first letter from each of value type
-        foreach($dataType as $word) {
-            $letter = substr($word, 0, 1);
-            $type .= $letter;
-        }
-
-        $dataValues = (count($data) >= 1) ? ' VALUES ('.$values.')' : '';
-        $sql= $table.$dataValues;
-
-        //$stmt initialization
-        $stmt = self::$_db->stmt_init();
-
-        //prepare statement
-        if($sqlPrepare = $stmt->prepare($sql)) {
-            $whereClause = $this->createParameters($data);
-
-            $values = array();
-            $v = $whereClause->getValues();
-            foreach($v as &$value) {
-                array_push($values, &$value);
-            }
-            $typeList = $whereClause->getTypeList();
-            $functionParams = array_merge(array(&$typeList), $values);
-            call_user_func_array(array($stmt, 'bind_param'), $functionParams);
-
-            $result = $stmt->execute();
-            if (true === $result) {
-                return ($stmt->insert_id);
-            }
-            else {
-                throw new Exception('Error: ' .$stmt->error);
-            }
-            $stmt->close();
-        }
-        else
-            throw new  Exception("Error: " .$stmt->error);
+        return $dbColumnName;
     }
 
     public function delete($table, $where) {
-        throw new  Exception("database successfully deleted");
+        throw new  Exception("Unsupported operation: please consider implementing soft-delete.");
     }
 
     public function update($table, array $data, array $where) {
@@ -397,43 +619,34 @@ class CW_MySQL
         $whereP = ' WHERE ' .$variableWhere;
         $sql = $update.$set.$whereP;
 
-        if($stmt = self::$_db->prepare($sql)) {
-            $whereType = $this->_checkTypeOfValues($where);
-            $dataType = $this->_checkTypeOfValues($data);
-            $t = array_merge($dataType, $whereType);
-
-            $type = '';
-            //getting first letter from each of value type
-            foreach($t as $word) {
-                $letter = substr($word, 0, 1);
-                $type .= $letter;
-            }
-
-            $clause = array_merge($data, $where);
-            $values = array();
-            $v = $clause;
-
-            foreach($v as &$value) {
-                array_push($values, &$value);
-            }
-
-            $functionParams = array_merge(array(&$type), $values);
-            if(call_user_func_array(array($stmt, 'bind_param'), $functionParams)){
-                if($stmt->execute()) {
-                    return ($stmt->affected_rows);
-                }
-            }
-            else {
-                throw new Exception('Error: ' .$stmt->error);
-            }
+        try {
+            $stmt = self::$_db->prepare($sql);
+        } catch(PDOException $ex) {
+            throw self::createPdoException('Error preparing update query', $ex);
         }
-        else {
-            throw new Exception('Error preparing: ' . self::$_db->error);
+
+
+        $whereType = $this->_checkTypeOfValues($where);
+        $dataType = $this->_checkTypeOfValues($data);
+        $t = array_merge($dataType, $whereType);
+
+        $type = '';
+        //getting first letter from each of value type
+        foreach($t as $word) {
+            $letter = substr($word, 0, 1);
+            $type .= $letter;
         }
+
+        $clause = array_merge($data, $where);
+        $this->bindQueryParameters($clause, $stmt);
+
+        $this->executeStatement($stmt);
+
+        return $stmt->rowCount();
     }
 
     public function getLastInsertId() {
-        return self::$_db->insert_id;
+        return self::$_db->lastInsertId();
     }
 }
 
@@ -461,9 +674,9 @@ class PrivateQueryParameters {
     /**
      * Adds an additional query clause to the parameters
      *
-     * @param $condition the condition; must be in the format [fieldname] [operator] ?
-     * @param $type the mysqli type of the value
-     * @param $value the value
+     * @param string $condition the condition; must be in the format [fieldname] [operator] ?
+     * @param integer $type the mysqli type of the value
+     * @param mixed $value the value
      * @return PrivateQueryParameters this for further building
      */
     public function addClause($condition, $type, $value) {

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project name="Elastica" default="build" basedir=".">
+<project name="xBoilerplate-additions" default="build" basedir=".">
 
     <property name="source" value="${basedir}/lib"/>
 
@@ -101,7 +101,7 @@
     <!-- Generate API documentation -->
     <target name="phpdoc">
         <exec executable="phpdoc">
-            <arg line="run" />
+            <arg line="-d ${basedir}/lib --target ${basedir}/build/api"/>
         </exec>
     </target>
 

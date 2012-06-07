@@ -5,10 +5,19 @@
  * Time: 09:23
  */
 
-require_once dirname(__FILE__) . '/../bootstrap.php';
-
 class CW_MailTest extends PHPUnit_Framework_TestCase
 {
+    public function setup() {
+        $this->config = array();
+        //TODO: these settings should come from the containing phpunit
+        $this->config['mail'] = array(
+
+        );
+        CW_TestXBoilerplate::overrideStandardXBoilerplate();
+        CW_TestXBoilerplate::$config = (object)$this->config;
+
+    }
+
     /**
      * For testing purposes we create a specialisation of the standard mailer; it allows us to 'store' the mail that was
      * sent and access the various members, ensuring that the class functions as designed.
@@ -27,8 +36,6 @@ class CW_MailTest extends PHPUnit_Framework_TestCase
      * mail headers.
      */
     public function testSimpleMailWithDefaultHeaders() {
-        $this->fail('yo');
-
         $mailer = $this->getTestMailer();
 
         $recipientAddress = 'test@example.com';
@@ -51,14 +58,28 @@ class CW_MailTest extends PHPUnit_Framework_TestCase
 
         $headers = $mailer->getHeaders();
 
-        $this->assertArrayHasKey($headers, CW_Mail::HEADER_FROM);
+        $this->assertArrayHasKey(CW_Mail::HEADER_FROM, $headers);
         $this->assertEquals($sender, $headers[CW_Mail::HEADER_FROM]);
 
-        $this->assertArrayHasKey($headers, CW_Mail::HEADER_CONTENT_TYPE);
+        $this->assertArrayHasKey(CW_Mail::HEADER_CONTENT_TYPE, $headers);
         $this->assertEquals(CW_Mail::HEADERVAL_HTML, $headers[CW_Mail::HEADER_CONTENT_TYPE]);
 
-        $this->assertArrayHasKey($headers, CW_Mail::HEADER_MIME);
+        $this->assertArrayHasKey(CW_Mail::HEADER_MIME, $headers);
         $this->assertEquals(CW_Mail::HEADERVAL_MIME, $headers[CW_Mail::HEADER_MIME]);
+    }
+
+    public function testSend_withInternationalCharacters() {
+        $mailer = $this->getTestMailer();
+        $subject = 'ü ä ö > < ° £ ! ¨` ^ ¿ ≠ ± “ # Ç [ ] | { }';
+        $content = strrev($subject);
+        $mailer->to('test@example.com')
+            ->from('sender@example.com')
+            ->subject($subject)
+            ->content($content);
+        $mailer->send();
+
+        $this->assertEquals($subject, $mailer->getSubject());
+        $this->assertEquals($content, $mailer->getContent());
     }
 
     public function testContentType() {
@@ -74,7 +95,8 @@ class CW_MailTest extends PHPUnit_Framework_TestCase
         $mailer->send();
 
         $headers = $mailer->getHeaders();
-        $this->assertArrayHasKey($headers, CW_Mail::HEADER_CONTENT_TYPE);
+        $this->assertArrayHasKey(CW_Mail::HEADER_CONTENT_TYPE, $headers);
+
         $this->assertEquals(CW_Mail::HEADERVAL_TEXT, $headers[CW_MAIL::HEADER_CONTENT_TYPE]);
 
     }
@@ -88,13 +110,13 @@ class CW_MailTest extends PHPUnit_Framework_TestCase
             ->content('Some content');
         // Override content-type by name
         $contentType = 'application/json';
-        $mailer->header('Content-type', $contentType);
+        $mailer->setHeader('Content-type', $contentType);
 
         $mailer->send();
 
         $headers = $mailer->getHeaders();
-        $this->assertArrayHasKey($headers, CW_Mail::HEADER_CONTENT_TYPE);
-        $this->assertEquals(contentType, $headers[CW_MAIL::HEADER_CONTENT_TYPE]);
+        $this->assertArrayHasKey(CW_Mail::HEADER_CONTENT_TYPE, $headers);
+        $this->assertEquals($contentType, $headers[CW_MAIL::HEADER_CONTENT_TYPE]);
     }
 
     public function testPersonalisation() {
@@ -106,13 +128,55 @@ class CW_MailTest extends PHPUnit_Framework_TestCase
             ->content('Some content');
 
         $mailer->personalisation('FIRSTNAME', 'Bob');
-
+        $mailer->personalisation('LASTNAME', 'Pearson');
         $message = 'Dear ' . CW_Mail::SUBSTITUTION_PREFIX . 'FIRSTNAME' . CW_Mail::SUBSTITUTION_POSTFIX . ', <br/>Welcome!';
+        $message.= 'Your surname, by the way, is '. CW_Mail::SUBSTITUTION_PREFIX . 'LASTNAME' . CW_Mail::SUBSTITUTION_POSTFIX;
         $mailer->content($message);
 
         $mailer->send();
 
-        $this->assertTrue(strpos($mailer->getContent(), 'Bob') != -1);
+        $this->assertTrue(strpos($mailer->getContent(), 'Bob') !== false, 'Firstname substitution failed.');
+        $this->assertTrue(strpos($mailer->getContent(), 'Pearson') !== false, 'Lastname substitution failed.');
+        $this->assertTrue(stripos($mailer->getContent(), '!*') === false, 'Found a substitution string still in the mail content!');
+    }
+
+    public function testSend_real() {
+        $mailer = CW_Mail::create();
+
+        $localAddress = 'vagrant@localhost';
+
+        $senderAddress = 'example@example.com';
+        $subject = 'Test subject';
+        $content = 'Test content';
+        $mailer->to($localAddress)
+            ->from($senderAddress)
+            ->subject($subject)
+            ->content($content);
+
+        $mailer->send();
+        sleep(1);
+        $mailerOutput = shell_exec("echo 1 | mail");
+        echo 'output---' . "\n";
+        $portions = preg_split('[\n]', $mailerOutput);
+        $headerValues = array();
+        array_walk(&$portions, function($item, $position) use(&$headerValues) {
+            $validHeaders = array('From' => true, 'Subject' => true);
+            $isPossibleHeader = stripos($item, ':');
+            if($isPossibleHeader !== false) {
+                $headerParts = preg_split('/:/', $item, 2);
+                $header = $headerParts[0];
+                if(array_key_exists($header, $validHeaders)) {
+                    $headerValues[$header] = substr($headerParts[1], 1);
+                }
+            }
+        });
+
+
+        $this->assertArrayHasKey('From', $headerValues);
+        $this->assertArrayHasKey('Subject', $headerValues);
+
+        $this->assertEquals($senderAddress, $headerValues['From']);
+        $this->assertEquals($subject, $headerValues['Subject']);
     }
 }
 
@@ -141,8 +205,8 @@ class CW_MailTest_MockMailer extends CW_Mail {
         return $this->content;
     }
 
-    protected function doSend($content, $headers) {
+    protected function doSend($content, array $headerValues) {
         $this->content = $content;
-        $this->headers = $headers;
+        $this->headers = $headerValues;
     }
 }
