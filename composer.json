@@ -7,6 +7,6 @@
         }
     ]
     , "require": {
-        "otupman/xBoilerplate": "0.2.*"
+        "otupman/xBoilerplate": "dev-test_composer"
     }
 }
