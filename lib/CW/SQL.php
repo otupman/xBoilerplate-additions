@@ -74,6 +74,7 @@ abstract class CW_SQL
     abstract public function delete($table, $where);
     abstract public function update($table, array $data, array $where);
     abstract public function getLastInsertId();
+    abstract public function insert($table, array $data);
 
     /**
      * Selects data from the specified table, always returning an array of the retrieve results.
