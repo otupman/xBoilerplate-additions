@@ -5,7 +5,7 @@
  * Date: 21/05/2012
  * Time: 09:23
  */
-require_once('../bootstrap.php');
+
 class CW_SQLTest extends PHPUnit_Framework_TestCase
 {
     private $config;
@@ -422,6 +422,17 @@ class CW_SQLTest extends PHPUnit_Framework_TestCase
         $this->assertEquals($lastname, $testUser->lastname, 'From selectRow(): Lastname does not match');
         $this->assertEquals($createdDate, $testUser->createdDate, 'From selectRow(): Created date does not match');
 
+        $newId = CW_SQL::getInstance()->insert('people', array('firstname' => 'Aladin', 'lastname' => 'Stevensen', 'age' => null));
+        $result = $this->_db->query('SELECT firstname, lastname, createdDate FROM people WHERE firstname = "' . $firstname . '"');
+        $insertedPerson = $result->fetch_object();
+        $this->assertObjectNotHasAttribute('age', $insertedPerson);
+
+        $results = CW_SQL::getInstance()->select(array('firstname', 'lastname', 'age'), 'people', array('id' => $newId));
+
+        $insertedPerson = $results[0];
+
+        $this->assertObjectHasAttribute('age', $insertedPerson);
+        $this->assertNull($insertedPerson->age);
     }
 
     public function testInsert_withHardDataTypes() {

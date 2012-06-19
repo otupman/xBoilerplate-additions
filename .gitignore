@@ -8,3 +8,6 @@ cache.properties
 /nbproject
 build
 atlassian-ide-plugin.xml
+composer.lock
+composer.phar
+vendor/autoload.php

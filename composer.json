@@ -1,0 +1,12 @@
+{
+    "name": "otupman/xBoilerplate-additions"
+    ,"repositories": [
+        {
+            "type": "vcs",
+            "url": "http://github.com/otupman/xBoilerplate"
+        }
+    ]
+    , "require": {
+        "otupman/xBoilerplate": "dev-test_composer"
+    }
+}

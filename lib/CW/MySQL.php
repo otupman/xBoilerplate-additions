@@ -410,6 +410,8 @@ class CW_MySQL extends CW_SQL
                 return PDO::PARAM_INT;
             case 'double':
                 return PDO::PARAM_INT;
+            case 'NULL':
+                return PDO::PARAM_NULL;
             case 'string':
                 return PDO::PARAM_STR;
             case 'object':

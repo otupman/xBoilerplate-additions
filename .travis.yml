@@ -6,4 +6,4 @@ php:
 before_script:
   - mysql -e 'CREATE DATABASE xBoilerplate_additions;'
 
-script: phpunit test/
+script: phpunit --bootstrap test/bootstrap.php test/

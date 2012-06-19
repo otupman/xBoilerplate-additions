@@ -5,8 +5,6 @@
  * Time: 09:23
  */
 
-
-require_once('../bootstrap.php');
 class CW_MailTest extends PHPUnit_Framework_TestCase
 {
     public function setup() {

@@ -1,5 +1,4 @@
 <?php
-
 defined('BASE_PATH') || define('BASE_PATH', realpath(dirname(__FILE__)));
 
 set_include_path(
@@ -12,6 +11,5 @@ function xBoilerplate_additions_autoload($class) {
     $file = str_replace('_', '/', $class) . '.php';
     require_once $file;
 }
-
 
 spl_autoload_register('xBoilerplate_additions_autoload');
