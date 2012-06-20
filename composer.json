@@ -5,7 +5,9 @@
             "type": "vcs",
             "url": "http://github.com/otupman/xBoilerplate"
         }
-    ]
+    ], "autoload": {
+        "classmap": ["lib/"]
+    }
     , "require": {
         "otupman/xBoilerplate": "dev-test_composer"
     }
