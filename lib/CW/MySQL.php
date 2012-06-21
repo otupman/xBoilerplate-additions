@@ -68,7 +68,10 @@ class CW_MySQL extends CW_SQL
     protected function openConnection($config)
     {
         $dsn = 'mysql:dbname=' . $config['schema'] . ';host=' . $config['host'];
-        $pdoOptions = array(PDO::ATTR_PERSISTENT => true);
+        $pdoOptions = array(
+            PDO::ATTR_PERSISTENT => true
+            , PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8" /** Forces UTF-8 communication with MySQL */
+        );
         try {
             self::$_db = new PDO($dsn, $config['username'], $config['password'], $pdoOptions);
             self::$_db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -601,6 +604,13 @@ class CW_MySQL extends CW_SQL
         throw new  Exception("Unsupported operation: please consider implementing soft-delete.");
     }
 
+    /**
+     * @param $table
+     * @param array $data
+     * @param array $where
+     * @return int
+     * @throws CW_SQLException
+     */
     public function update($table, array $data, array $where) {
         $columnNames = array_keys($data);
         $variablesSet = '';
@@ -612,7 +622,11 @@ class CW_MySQL extends CW_SQL
         $whereNames = array_keys($where);
         $variableWhere = '';
         foreach($whereNames as $item) {
+            if(sizeof($variableWhere) > 0) {
+                $variableWhere .= " AND ";
+            }
             $variableWhere .=$item .'=? ';
+
         }
         $variableWhere = substr($variableWhere, 0, -1);
 
